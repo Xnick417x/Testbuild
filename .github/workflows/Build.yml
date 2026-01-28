@@ -1,4 +1,4 @@
-name: Wine 11.0 v70 Stable Mirror
+name: Wine 11.0 v71 Stable (No Tests)
 on: workflow_dispatch
 
 jobs:
@@ -29,6 +29,15 @@ jobs:
           git clone https://github.com/wine-mirror/wine.git source
           cd source
           git checkout wine-11.0
+
+      - name: Nuclear Test Removal
+        run: |
+          cd source
+          # This command finds every folder named "tests" and deletes it.
+          # This guarantees activeds_test.exe cannot fail, because it won't exist.
+          find . -name "tests" -type d -exec rm -rf {} +
+          # We also remove the winetest program just in case
+          rm -rf programs/winetest
 
       - name: Patch
         run: |
@@ -91,17 +100,17 @@ jobs:
           cat <<EOF > staging/profile.json
           {
             "type": "Wine",
-            "versionName": "Wine 11.0 v70 Stable",
-            "versionCode": 70,
-            "description": "v70 Stable Mirror",
+            "versionName": "Wine 11.0 v71 Stable",
+            "versionCode": 71,
+            "description": "v71 Stable (Cleaned)",
             "files": [],
             "wine": { "binPath": "bin", "libPath": "lib", "prefixPack": "prefixPack.txz" }
           }
           EOF
-          cd staging && tar -cJf ../Wine-11.0-v70-Stable.wcp *
+          cd staging && tar -cJf ../Wine-11.0-v71-Stable.wcp *
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Wine-11.0-v70-Stable
-          path: Wine-11.0-v70-Stable.wcp
+          name: Wine-11.0-v71-Stable
+          path: Wine-11.0-v71-Stable.wcp
