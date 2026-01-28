@@ -1,4 +1,4 @@
-name: Wine 11.0 v76 Stable (Wrapper Fix)
+name: Wine 11.0 v78 Stable (Global Purge)
 on: workflow_dispatch
 
 jobs:
@@ -30,9 +30,21 @@ jobs:
           cd source
           git checkout wine-11.0
 
-      - name: Patch
+      - name: Patch & PURGE
         run: |
           cd source
+          
+          # --- THE GLOBAL PURGE ---
+          # 1. Remove the illegal flag from every file in the source tree.
+          #    This ensures Configure, Makefiles, and Winegcc simply forget it exists.
+          grep -rl "--no-default-config" . | xargs sed -i 's/--no-default-config//g'
+          
+          # 2. Hollow Shell (Disable Tests completely)
+          #    Remove test makefiles from the configure script so it doesn't try to build them.
+          sed -i '/tests\/Makefile/d' configure.ac
+          # ------------------------
+
+          # Apply Patches
           for p in c9ee4e003238c9461461156f986d91349de27fea 441c0fe673de0a640e176110d9442e8e41250fd7 6e7166c71de8c09a1c91fb96228920e7085e2366; do
             wget https://github.com/Pipetto-crypto/wine/commit/$p.patch -O p.patch && patch -p1 < p.patch || true
           done
@@ -46,6 +58,7 @@ jobs:
           sed -i 's/size = 0x110000;/size = 0;/g' dlls/ntdll/unix/virtual.c
           sed -i 's/0x00010000/0x00000000/g' loader/preloader.c || true
           
+          # Regenerate configure (Critical)
           autoreconf -f
 
       - name: Native Tools
@@ -61,29 +74,8 @@ jobs:
           cd source/build_android
           TARGET="x86_64-linux-android28"
           NDK_BIN="$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin"
-          
-          # --- COMPILER WRAPPER START ---
-          # This script sits between Wine and Clang. 
-          # It silently deletes the '--no-default-config' flag that causes the crash.
-          echo '#!/bin/bash' > clang-wrap.sh
-          echo 'ARGS=("$@")' >> clang-wrap.sh
-          echo 'FILTERED=()' >> clang-wrap.sh
-          echo 'for arg in "${ARGS[@]}"; do' >> clang-wrap.sh
-          echo '  if [ "$arg" != "--no-default-config" ]; then' >> clang-wrap.sh
-          echo '    FILTERED+=("$arg")' >> clang-wrap.sh
-          echo '  fi' >> clang-wrap.sh
-          echo 'done' >> clang-wrap.sh
-          echo 'exec '"$NDK_BIN/${TARGET}-clang"' "${FILTERED[@]}"' >> clang-wrap.sh
-          chmod +x clang-wrap.sh
-          
-          # Same wrapper for C++ just in case
-          cp clang-wrap.sh clangxx-wrap.sh
-          sed -i "s|${TARGET}-clang|${TARGET}-clang++|g" clangxx-wrap.sh
-          chmod +x clangxx-wrap.sh
-          # --- COMPILER WRAPPER END ---
-
-          export CC="$(pwd)/clang-wrap.sh"
-          export CXX="$(pwd)/clangxx-wrap.sh"
+          export CC="$NDK_BIN/${TARGET}-clang"
+          export CXX="$NDK_BIN/${TARGET}-clang++"
           export LD="$NDK_BIN/ld"
           export CROSS_COMPILE="llvm-"
           export CFLAGS="-O2 -g0"
@@ -92,7 +84,7 @@ jobs:
           
           ../configure --host=$TARGET --with-wine-tools=$TOOLS_PATH --enable-archs=i386,x86_64 --prefix=/usr --with-mingw=clang --with-sdl --enable-win64 --enable-nls --with-pulse --with-x --disable-win16 --disable-opencl --disable-tests --without-wayland --without-capi --without-coreaudio --without-cups --without-dbus --without-gphoto --without-gssapi --without-krb5 --without-netapi --without-oss --without-pcap --without-pcsclite --without-sane --without-udev --without-unwind --without-usb --without-v4l2 --without-xinerama --without-xxf86vm --without-osmesa --enable-wineandroid_drv=no
           
-          # Neutralize Tests (Just to be safe/faster)
+          # Hollow Shell: Neutralize any remaining test makefiles
           find . -name "Makefile" | grep "/tests/" | xargs -I {} sh -c 'echo "all: ;" > {}'
           
           make -j$(nproc) install DESTDIR=$(pwd)/stage
@@ -120,17 +112,17 @@ jobs:
           cat <<EOF > staging/profile.json
           {
             "type": "Wine",
-            "versionName": "Wine 11.0 v76 Stable",
-            "versionCode": 76,
-            "description": "v76 Wrapper Fix",
+            "versionName": "Wine 11.0 v78 Stable",
+            "versionCode": 78,
+            "description": "v78 Global Purge",
             "files": [],
             "wine": { "binPath": "bin", "libPath": "lib", "prefixPack": "prefixPack.txz" }
           }
           EOF
-          cd staging && tar -cJf ../Wine-11.0-v76-Stable.wcp *
+          cd staging && tar -cJf ../Wine-11.0-v78-Stable.wcp *
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Wine-11.0-v76-Stable
-          path: Wine-11.0-v76-Stable.wcp
+          name: Wine-11.0-v78-Stable
+          path: Wine-11.0-v78-Stable.wcp
