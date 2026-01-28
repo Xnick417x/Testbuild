@@ -1,4 +1,4 @@
-name: Wine 11.0 v80 Stable (Ziad Method)
+name: Wine 11.0 v81 Stable (No X11 Fix)
 on: workflow_dispatch
 
 jobs:
@@ -33,11 +33,13 @@ jobs:
       - name: Patch & Purge
         run: |
           cd source
-          # 1. Ziad's Fix: Ensure we don't have conflicting flags
+          # 1. Global Purge: Remove unsupported flag (Fixes Compiler Crash)
           grep -rl -- "--no-default-config" . | xargs sed -i 's/--no-default-config//g'
+          
+          # 2. Hollow Shell: Disable Tests (Fixes Build Crash)
           sed -i '/tests\/Makefile/d' configure.ac
           
-          # 2. Apply Patches
+          # 3. Apply Patches
           for p in c9ee4e003238c9461461156f986d91349de27fea 441c0fe673de0a640e176110d9442e8e41250fd7 6e7166c71de8c09a1c91fb96228920e7085e2366; do
             wget https://github.com/Pipetto-crypto/wine/commit/$p.patch -O p.patch && patch -p1 < p.patch || true
           done
@@ -46,7 +48,7 @@ jobs:
           wget https://raw.githubusercontent.com/airidosas252/Wine-Builds/master/address-space-proot.patch && patch -p1 < address-space-proot.patch || true
           wget https://raw.githubusercontent.com/airidosas252/Wine-Builds/master/esync.patch && patch -p1 < esync.patch || true
           
-          # Preloader Fix
+          # Preloader Fix (Termux/Bionic)
           sed -i 's/base = (char \*)0x10000;/base = NULL;/g' dlls/ntdll/unix/virtual.c
           sed -i 's/size = 0x110000;/size = 0;/g' dlls/ntdll/unix/virtual.c
           sed -i 's/0x00010000/0x00000000/g' loader/preloader.c || true
@@ -57,10 +59,11 @@ jobs:
         run: |
           mkdir -p source/build_native
           cd source/build_native
+          # Build tools without X to avoid host issues
           ../configure --enable-win64 --without-x --without-freetype --disable-tests
           make -j$(nproc)
 
-      - name: Build Android (Ziad Method)
+      - name: Build Android
         run: |
           mkdir -p source/build_android
           cd source/build_android
@@ -76,7 +79,8 @@ jobs:
           export CXXFLAGS="-O2 -g0"
           TOOLS_PATH="$(pwd)/../build_native"
           
-          ../configure --host=$TARGET --with-wine-tools=$TOOLS_PATH --enable-archs=i386,x86_64 --prefix=/usr --with-mingw=clang --with-sdl --enable-win64 --enable-nls --with-pulse --with-x --disable-win16 --disable-opencl --disable-tests --without-wayland --without-capi --without-coreaudio --without-cups --without-dbus --without-gphoto --without-gssapi --without-krb5 --without-netapi --without-oss --without-pcap --without-pcsclite --without-sane --without-udev --without-unwind --without-usb --without-v4l2 --without-xinerama --without-xxf86vm --without-osmesa --enable-wineandroid_drv=no
+          # FIXED HERE: Changed --with-x to --without-x
+          ../configure --host=$TARGET --with-wine-tools=$TOOLS_PATH --enable-archs=i386,x86_64 --prefix=/usr --with-mingw=clang --with-sdl --enable-win64 --enable-nls --with-pulse --without-x --disable-win16 --disable-opencl --disable-tests --without-wayland --without-capi --without-coreaudio --without-cups --without-dbus --without-gphoto --without-gssapi --without-krb5 --without-netapi --without-oss --without-pcap --without-pcsclite --without-sane --without-udev --without-unwind --without-usb --without-v4l2 --without-xinerama --without-xxf86vm --without-osmesa --enable-wineandroid_drv=no
           
           # Safety: Neutralize tests
           find . -name "Makefile" | grep "/tests/" | xargs -I {} sh -c 'echo "all: ;" > {}'
@@ -106,17 +110,17 @@ jobs:
           cat <<EOF > staging/profile.json
           {
             "type": "Wine",
-            "versionName": "Wine 11.0 v80 Stable",
-            "versionCode": 80,
-            "description": "v80 Ziad Method",
+            "versionName": "Wine 11.0 v81 Stable",
+            "versionCode": 81,
+            "description": "v81 No-X11 Fix",
             "files": [],
             "wine": { "binPath": "bin", "libPath": "lib", "prefixPack": "prefixPack.txz" }
           }
           EOF
-          cd staging && tar -cJf ../Wine-11.0-v80-Stable.wcp *
+          cd staging && tar -cJf ../Wine-11.0-v81-Stable.wcp *
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Wine-11.0-v80-Stable
-          path: Wine-11.0-v80-Stable.wcp
+          name: Wine-11.0-v81-Stable
+          path: Wine-11.0-v81-Stable.wcp
