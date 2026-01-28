@@ -1,4 +1,4 @@
-name: Wine 11.0 v68 CMod
+name: Wine 11.0 v70 Stable Mirror
 on: workflow_dispatch
 
 jobs:
@@ -26,19 +26,11 @@ jobs:
 
       - name: Clone
         run: |
-          git clone https://gitlab.winehq.org/wine/wine.git source
-          git clone https://github.com/wine-staging/wine-staging.git staging_source
+          git clone https://github.com/wine-mirror/wine.git source
           cd source
           git checkout wine-11.0
-          cd ../staging_source
-          git checkout wine-11.0
 
-      - name: Patch Staging
-        run: |
-          cd staging_source
-          ./patches/patchinstall.sh DESTDIR=../source --all --backend=patch
-
-      - name: Patch Android
+      - name: Patch
         run: |
           cd source
           for p in c9ee4e003238c9461461156f986d91349de27fea 441c0fe673de0a640e176110d9442e8e41250fd7 6e7166c71de8c09a1c91fb96228920e7085e2366; do
@@ -53,14 +45,14 @@ jobs:
           sed -i 's/0x00010000/0x00000000/g' loader/preloader.c || true
           autoreconf -f
 
-      - name: Native Tools
+      - name: Native
         run: |
           mkdir -p source/build_native
           cd source/build_native
           ../configure --enable-win64 --without-x --without-freetype
           make -j$(nproc)
 
-      - name: Build Android
+      - name: Android
         run: |
           mkdir -p source/build_android
           cd source/build_android
@@ -99,17 +91,17 @@ jobs:
           cat <<EOF > staging/profile.json
           {
             "type": "Wine",
-            "versionName": "Wine 11.0 v68 CMod",
-            "versionCode": 68,
-            "description": "v68 CMod",
+            "versionName": "Wine 11.0 v70 Stable",
+            "versionCode": 70,
+            "description": "v70 Stable Mirror",
             "files": [],
             "wine": { "binPath": "bin", "libPath": "lib", "prefixPack": "prefixPack.txz" }
           }
           EOF
-          cd staging && tar -cJf ../Wine-11.0-v68-CMod.wcp *
+          cd staging && tar -cJf ../Wine-11.0-v70-Stable.wcp *
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Wine-11.0-v68-CMod
-          path: Wine-11.0-v68-CMod.wcp
+          name: Wine-11.0-v70-Stable
+          path: Wine-11.0-v70-Stable.wcp
