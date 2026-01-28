@@ -54,3 +54,69 @@ jobs:
           autoreconf -f
 
       - name: Native Tools
+        run: |
+          mkdir -p source/build_native
+          cd source/build_native
+          ../configure --enable-win64 --without-x --without-freetype --disable-tests
+          make -j$(nproc)
+
+      - name: Build Android (Ziad Method)
+        run: |
+          mkdir -p source/build_android
+          cd source/build_android
+          TARGET="x86_64-linux-android28"
+          NDK_BIN="$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          
+          # ZIAD'S METHOD: Point CC/CXX directly to the specific binary
+          export CC="$NDK_BIN/${TARGET}-clang"
+          export CXX="$NDK_BIN/${TARGET}-clang++"
+          export LD="$NDK_BIN/ld"
+          export CROSS_COMPILE="llvm-"
+          export CFLAGS="-O2 -g0"
+          export CXXFLAGS="-O2 -g0"
+          TOOLS_PATH="$(pwd)/../build_native"
+          
+          ../configure --host=$TARGET --with-wine-tools=$TOOLS_PATH --enable-archs=i386,x86_64 --prefix=/usr --with-mingw=clang --with-sdl --enable-win64 --enable-nls --with-pulse --with-x --disable-win16 --disable-opencl --disable-tests --without-wayland --without-capi --without-coreaudio --without-cups --without-dbus --without-gphoto --without-gssapi --without-krb5 --without-netapi --without-oss --without-pcap --without-pcsclite --without-sane --without-udev --without-unwind --without-usb --without-v4l2 --without-xinerama --without-xxf86vm --without-osmesa --enable-wineandroid_drv=no
+          
+          # Safety: Neutralize tests
+          find . -name "Makefile" | grep "/tests/" | xargs -I {} sh -c 'echo "all: ;" > {}'
+          
+          make -j$(nproc) install DESTDIR=$(pwd)/stage
+
+      - name: Package
+        run: |
+          mkdir -p prefix_root/.wine/drive_c/windows/system32
+          mkdir -p prefix_root/.wine/drive_c/windows/syswow64
+          mkdir -p prefix_root/.wine/drive_c/users/xuser
+          cp -r source/build_android/stage/usr/lib/wine/x86_64-windows/* prefix_root/.wine/drive_c/windows/system32/
+          cp -r source/build_android/stage/usr/lib/wine/i386-windows/* prefix_root/.wine/drive_c/windows/syswow64/
+          printf "WINE REGISTRY Version 2\n\n[System\\\\CurrentControlSet\\\\Control\\\\Video\\\\{00000000-0000-0000-0000-000000000000}\\\\0000]\n\"Renderer\"=\"vulkan\"\n" > prefix_root/.wine/system.reg
+          echo "WINE REGISTRY Version 2" > prefix_root/.wine/user.reg
+          echo "WINE REGISTRY Version 2" > prefix_root/.wine/userdef.reg
+          echo "disable" > prefix_root/.wine/.update-timestamp
+          cd prefix_root
+          tar -cJf ../prefixPack.txz .wine
+          cd ..
+          mkdir staging
+          mkdir -p staging/bin staging/lib staging/share
+          cp -r source/build_android/stage/usr/bin/* staging/bin/
+          cp -r source/build_android/stage/usr/lib/* staging/lib/
+          cp -r source/build_android/stage/usr/share/* staging/share/
+          mv prefixPack.txz staging/
+          cat <<EOF > staging/profile.json
+          {
+            "type": "Wine",
+            "versionName": "Wine 11.0 v80 Stable",
+            "versionCode": 80,
+            "description": "v80 Ziad Method",
+            "files": [],
+            "wine": { "binPath": "bin", "libPath": "lib", "prefixPack": "prefixPack.txz" }
+          }
+          EOF
+          cd staging && tar -cJf ../Wine-11.0-v80-Stable.wcp *
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: Wine-11.0-v80-Stable
+          path: Wine-11.0-v80-Stable.wcp
