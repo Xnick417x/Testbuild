@@ -1,28 +1,39 @@
-name: Build Wine 11.0 v58 (Staging/Gamer Fixed)
+name: Build Wine 11.0 v58 (Staging + Container Fix)
 on: workflow_dispatch
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
+    # THIS IS THE FIX: We run the steps inside an Ubuntu 20.04 Docker container
+    container:
+      image: ubuntu:20.04
 
     steps:
       - name: Cleanup
-        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY"
+        # Since we are in a clean container, we don't need sudo or aggressive cleanup
+        run: echo "Starting Containerized Build..."
 
       - name: Install Dependencies
         run: |
-          sudo apt-get update
-          # Ubuntu 20.04 handles these mixed 32/64 libraries correctly
-          sudo apt-get install -y build-essential git wget tar xz-utils flex bison pkg-config \
+          apt-get update
+          apt-get install -y software-properties-common
+          # Ubuntu 20.04 inside the container handles these dependencies perfectly
+          apt-get install -y build-essential git wget tar xz-utils flex bison pkg-config \
           gcc-multilib g++-multilib libx11-dev libpulse-dev libsdl2-dev patch python3 autoconf
 
       - name: Setup Toolchains
         run: |
+          # Toolchain install for 20.04
           wget https://github.com/mstorsjo/llvm-mingw/releases/download/20250924/llvm-mingw-20250924-ucrt-ubuntu-20.04-x86_64.tar.xz
           tar -xf llvm-mingw-20250924-ucrt-ubuntu-20.04-x86_64.tar.xz
           echo "$(pwd)/llvm-mingw-20250924-ucrt-ubuntu-20.04-x86_64/bin" >> $GITHUB_PATH
-          echo "NDK_BIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_ENV
-          echo "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
+          
+          # Manually setup NDK since we are in a bare container (GitHub env vars might be missing)
+          # We download a fresh NDK to be safe and self-contained
+          wget https://dl.google.com/android/repository/android-ndk-r25c-linux.zip
+          unzip -q android-ndk-r25c-linux.zip
+          echo "NDK_BIN=$(pwd)/android-ndk-r25c/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_ENV
+          echo "$(pwd)/android-ndk-r25c/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
 
       - name: Clone Sources
         run: |
@@ -61,6 +72,8 @@ jobs:
           mkdir -p source/build_android
           cd source/build_android
           TARGET="x86_64-linux-android28"
+          # Re-export NDK path for this shell
+          NDK_BIN="$(pwd)/../../android-ndk-r25c/toolchains/llvm/prebuilt/linux-x86_64/bin"
           export CC="$NDK_BIN/${TARGET}-clang"
           export CXX="$NDK_BIN/${TARGET}-clang++"
           export LD="$NDK_BIN/ld"
@@ -132,7 +145,7 @@ jobs:
             "type": "Wine",
             "versionName": "Wine 11.0 v58-Staging",
             "versionCode": 58,
-            "description": "v58 Staging Gamer (Ubuntu 20.04)",
+            "description": "v58 Staging Gamer (Containerized)",
             "files": [],
             "wine": { "binPath": "bin", "libPath": "lib", "prefixPack": "prefixPack.txz" }
           }
