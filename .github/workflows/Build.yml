@@ -1,4 +1,4 @@
-name: Wine 11.0 v64 Stable (Tests Skipped)
+name: Wine 11.0 v68 CMod
 on: workflow_dispatch
 
 jobs:
@@ -25,7 +25,18 @@ jobs:
           echo "$(pwd)/android-ndk-r25c/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
 
       - name: Clone
-        run: git clone --depth 1 --branch master https://gitlab.winehq.org/wine/wine.git source
+        run: |
+          git clone https://gitlab.winehq.org/wine/wine.git source
+          git clone https://github.com/wine-staging/wine-staging.git staging_source
+          cd source
+          git checkout wine-11.0
+          cd ../staging_source
+          git checkout wine-11.0
+
+      - name: Patch Staging
+        run: |
+          cd staging_source
+          ./patches/patchinstall.sh DESTDIR=../source --all --backend=patch
 
       - name: Patch Android
         run: |
@@ -47,7 +58,6 @@ jobs:
           mkdir -p source/build_native
           cd source/build_native
           ../configure --enable-win64 --without-x --without-freetype
-          # Standard build for tools (widl/winebuild)
           make -j$(nproc)
 
       - name: Build Android
@@ -64,8 +74,6 @@ jobs:
           export CXXFLAGS="-O2 -g0"
           TOOLS_PATH="$(pwd)/../build_native"
           ../configure --host=$TARGET --with-wine-tools=$TOOLS_PATH --enable-archs=i386,x86_64 --prefix=/usr --with-mingw=clang --with-sdl --enable-win64 --enable-nls --with-pulse --with-x --disable-win16 --disable-opencl --disable-tests --without-wayland --without-capi --without-coreaudio --without-cups --without-dbus --without-gphoto --without-gssapi --without-krb5 --without-netapi --without-oss --without-pcap --without-pcsclite --without-sane --without-udev --without-unwind --without-usb --without-v4l2 --without-xinerama --without-xxf86vm --without-osmesa --enable-wineandroid_drv=no
-          
-          # CRITICAL FIX: Direct 'make install' avoids the test crash
           make -j$(nproc) install DESTDIR=$(pwd)/stage
 
       - name: Package
@@ -78,6 +86,7 @@ jobs:
           printf "WINE REGISTRY Version 2\n\n[System\\\\CurrentControlSet\\\\Control\\\\Video\\\\{00000000-0000-0000-0000-000000000000}\\\\0000]\n\"Renderer\"=\"vulkan\"\n" > prefix_root/.wine/system.reg
           echo "WINE REGISTRY Version 2" > prefix_root/.wine/user.reg
           echo "WINE REGISTRY Version 2" > prefix_root/.wine/userdef.reg
+          echo "disable" > prefix_root/.wine/.update-timestamp
           cd prefix_root
           tar -cJf ../prefixPack.txz .wine
           cd ..
@@ -90,17 +99,17 @@ jobs:
           cat <<EOF > staging/profile.json
           {
             "type": "Wine",
-            "versionName": "Wine 11.0 v64 Stable",
-            "versionCode": 64,
-            "description": "v64 Stable (Tests Skipped)",
+            "versionName": "Wine 11.0 v68 CMod",
+            "versionCode": 68,
+            "description": "v68 CMod",
             "files": [],
             "wine": { "binPath": "bin", "libPath": "lib", "prefixPack": "prefixPack.txz" }
           }
           EOF
-          cd staging && tar -cJf ../Wine-11.0-v64-Stable.wcp *
+          cd staging && tar -cJf ../Wine-11.0-v68-CMod.wcp *
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Wine-11.0-v64-Stable
-          path: Wine-11.0-v64-Stable.wcp
+          name: Wine-11.0-v68-CMod
+          path: Wine-11.0-v68-CMod.wcp
