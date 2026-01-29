@@ -1,4 +1,4 @@
-name: Wine 11.0 v81 Stable (No X11 Fix)
+name: Wine 11.0 v82 Stable (Termux + FreeType)
 on: workflow_dispatch
 
 jobs:
@@ -30,28 +30,24 @@ jobs:
           cd source
           git checkout wine-11.0
 
-      - name: Patch & Purge
+      - name: Apply Patches
         run: |
           cd source
-          # 1. Global Purge: Remove unsupported flag (Fixes Compiler Crash)
-          grep -rl -- "--no-default-config" . | xargs sed -i 's/--no-default-config//g'
-          
-          # 2. Hollow Shell: Disable Tests (Fixes Build Crash)
-          sed -i '/tests\/Makefile/d' configure.ac
-          
-          # 3. Apply Patches
+          # 1. Pipetto (Boot/Shared Memory)
           for p in c9ee4e003238c9461461156f986d91349de27fea 441c0fe673de0a640e176110d9442e8e41250fd7 6e7166c71de8c09a1c91fb96228920e7085e2366; do
             wget https://github.com/Pipetto-crypto/wine/commit/$p.patch -O p.patch && patch -p1 < p.patch || true
           done
+          
+          # 2. Bruno (Winlator Integration)
           wget https://github.com/brunodev85/wine-9.2-custom/commit/a4ef2bf8963fe4bfab390eebf73336364ce209bc.patch -O bruno_desktop.patch && patch -p1 < bruno_desktop.patch || true
           wget https://github.com/brunodev85/wine-9.2-custom/commit/73336364ce209bc.patch -O bruno_shell.patch && patch -p1 < bruno_shell.patch || true
+          
+          # 3. Airidosas & Termux Fixes
           wget https://raw.githubusercontent.com/airidosas252/Wine-Builds/master/address-space-proot.patch && patch -p1 < address-space-proot.patch || true
           wget https://raw.githubusercontent.com/airidosas252/Wine-Builds/master/esync.patch && patch -p1 < esync.patch || true
           
-          # Preloader Fix (Termux/Bionic)
-          sed -i 's/base = (char \*)0x10000;/base = NULL;/g' dlls/ntdll/unix/virtual.c
-          sed -i 's/size = 0x110000;/size = 0;/g' dlls/ntdll/unix/virtual.c
-          sed -i 's/0x00010000/0x00000000/g' loader/preloader.c || true
+          # THE REAL TERMUX PATCH (Replaces manual hacks)
+          wget https://raw.githubusercontent.com/airidosas252/Wine-Builds/master/termux-wine-fix.patch && patch -p1 < termux-wine-fix.patch || true
           
           autoreconf -f
 
@@ -59,7 +55,6 @@ jobs:
         run: |
           mkdir -p source/build_native
           cd source/build_native
-          # Build tools without X to avoid host issues
           ../configure --enable-win64 --without-x --without-freetype --disable-tests
           make -j$(nproc)
 
@@ -69,8 +64,6 @@ jobs:
           cd source/build_android
           TARGET="x86_64-linux-android28"
           NDK_BIN="$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin"
-          
-          # ZIAD'S METHOD: Point CC/CXX directly to the specific binary
           export CC="$NDK_BIN/${TARGET}-clang"
           export CXX="$NDK_BIN/${TARGET}-clang++"
           export LD="$NDK_BIN/ld"
@@ -79,12 +72,16 @@ jobs:
           export CXXFLAGS="-O2 -g0"
           TOOLS_PATH="$(pwd)/../build_native"
           
-          # FIXED HERE: Changed --with-x to --without-x
-          ../configure --host=$TARGET --with-wine-tools=$TOOLS_PATH --enable-archs=i386,x86_64 --prefix=/usr --with-mingw=clang --with-sdl --enable-win64 --enable-nls --with-pulse --without-x --disable-win16 --disable-opencl --disable-tests --without-wayland --without-capi --without-coreaudio --without-cups --without-dbus --without-gphoto --without-gssapi --without-krb5 --without-netapi --without-oss --without-pcap --without-pcsclite --without-sane --without-udev --without-unwind --without-usb --without-v4l2 --without-xinerama --without-xxf86vm --without-osmesa --enable-wineandroid_drv=no
+          # 1. Configure (Added --without-freetype and --without-x to fix the crash)
+          ../configure --host=$TARGET --with-wine-tools=$TOOLS_PATH --enable-archs=i386,x86_64 --prefix=/usr --with-mingw=clang --with-sdl --enable-win64 --enable-nls --with-pulse --without-x --without-freetype --disable-win16 --disable-opencl --disable-tests --without-wayland --without-capi --without-coreaudio --without-cups --without-dbus --without-gphoto --without-gssapi --without-krb5 --without-netapi --without-oss --without-pcap --without-pcsclite --without-sane --without-udev --without-unwind --without-usb --without-v4l2 --without-xinerama --without-xxf86vm --without-osmesa --enable-wineandroid_drv=no
           
-          # Safety: Neutralize tests
+          # 2. SURGICAL FIX: Strip the unsupported flag from Makefiles
+          find . -name "Makefile" -exec sed -i 's/--no-default-config//g' {} +
+          
+          # 3. Hollow Shell: Neutralize tests
           find . -name "Makefile" | grep "/tests/" | xargs -I {} sh -c 'echo "all: ;" > {}'
           
+          # 4. Install
           make -j$(nproc) install DESTDIR=$(pwd)/stage
 
       - name: Package
@@ -110,17 +107,17 @@ jobs:
           cat <<EOF > staging/profile.json
           {
             "type": "Wine",
-            "versionName": "Wine 11.0 v81 Stable",
-            "versionCode": 81,
-            "description": "v81 No-X11 Fix",
+            "versionName": "Wine 11.0 v82 Stable",
+            "versionCode": 82,
+            "description": "v82 Termux Patch + FreeType Fix",
             "files": [],
             "wine": { "binPath": "bin", "libPath": "lib", "prefixPack": "prefixPack.txz" }
           }
           EOF
-          cd staging && tar -cJf ../Wine-11.0-v81-Stable.wcp *
+          cd staging && tar -cJf ../Wine-11.0-v82-Stable.wcp *
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Wine-11.0-v81-Stable
-          path: Wine-11.0-v81-Stable.wcp
+          name: Wine-11.0-v82-Stable
+          path: Wine-11.0-v82-Stable.wcp
