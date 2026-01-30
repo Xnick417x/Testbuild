@@ -1,4 +1,4 @@
-name: Wine 11.0 v84 Stable (Pre-Flight Sabotage)
+name: Wine 11.0 v85 Stable (Hybrid Fix)
 on: workflow_dispatch
 
 jobs:
@@ -30,7 +30,7 @@ jobs:
           cd source
           git checkout wine-11.0
 
-      - name: Apply Patches (No Autoreconf)
+      - name: Apply Patches (Termux Official)
         run: |
           cd source
           # 1. Pipetto (Boot/Shared Memory)
@@ -47,15 +47,17 @@ jobs:
           wget https://raw.githubusercontent.com/airidosas252/Wine-Builds/master/esync.patch && patch -p1 < esync.patch || true
           wget https://raw.githubusercontent.com/airidosas252/Wine-Builds/master/termux-wine-fix.patch && patch -p1 < termux-wine-fix.patch || true
 
-          # IMPORTANT: We do NOT run autoreconf here. We want to use the existing configure script
-          # but modify it manually in the next step.
+          # 4. REGENERATE CONFIGURE (Restores v83 behavior so Pulse/X11 pass)
+          autoreconf -f
 
       - name: Native Tools
         run: |
           mkdir -p source/build_native
           cd source/build_native
-          # We edit the configure script HERE for the native build too, just to be safe/consistent.
+          
+          # Edit the REGENERATED configure script to remove the bad flag
           sed -i 's/--no-default-config//g' ../configure
+          
           ../configure --enable-win64 --without-x --without-freetype --disable-tests
           make -j$(nproc)
 
@@ -73,16 +75,18 @@ jobs:
           export CXXFLAGS="-O2 -g0"
           TOOLS_PATH="$(pwd)/../build_native"
           
-          # --- THE PRE-FLIGHT SABOTAGE ---
-          # We delete the flag from the 'configure' file itself.
-          # When configure runs, it will try to add "" instead of "--no-default-config".
+          # --- THE FIX: Edit the regenerated configure script ---
+          # We run this AGAIN just to be sure, targeting the script used for Android
           sed -i 's/--no-default-config//g' ../configure
-          # -------------------------------
+          # ----------------------------------------------------
           
-          # Configure (Includes fixes for X11/Freetype from v83)
+          # Configure (Includes --without-freetype from v83, but tries --with-pulse)
           ../configure --host=$TARGET --with-wine-tools=$TOOLS_PATH --enable-archs=i386,x86_64 --prefix=/usr --with-mingw=clang --with-sdl --enable-win64 --enable-nls --with-pulse --without-x --without-freetype --disable-win16 --disable-opencl --disable-tests --without-wayland --without-capi --without-coreaudio --without-cups --without-dbus --without-gphoto --without-gssapi --without-krb5 --without-netapi --without-oss --without-pcap --without-pcsclite --without-sane --without-udev --without-unwind --without-usb --without-v4l2 --without-xinerama --without-xxf86vm --without-osmesa --enable-wineandroid_drv=no
           
-          # Safety: Ensure tests are neutralized (Hollow Shell)
+          # Safety: Strip Makefiles too (Belt and Suspenders)
+          find . -name "Makefile" -exec sed -i 's/--no-default-config//g' {} +
+          
+          # Hollow Shell: Neutralize tests
           find . -name "Makefile" | grep "/tests/" | xargs -I {} sh -c 'echo "all: ;" > {}'
           
           make -j$(nproc) install DESTDIR=$(pwd)/stage
@@ -110,17 +114,17 @@ jobs:
           cat <<EOF > staging/profile.json
           {
             "type": "Wine",
-            "versionName": "Wine 11.0 v84 Stable",
-            "versionCode": 84,
-            "description": "v84 Pre-Flight Sabotage",
+            "versionName": "Wine 11.0 v85 Stable",
+            "versionCode": 85,
+            "description": "v85 Hybrid Fix",
             "files": [],
             "wine": { "binPath": "bin", "libPath": "lib", "prefixPack": "prefixPack.txz" }
           }
           EOF
-          cd staging && tar -cJf ../Wine-11.0-v84-Stable.wcp *
+          cd staging && tar -cJf ../Wine-11.0-v85-Stable.wcp *
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Wine-11.0-v84-Stable
-          path: Wine-11.0-v84-Stable.wcp
+          name: Wine-11.0-v85-Stable
+          path: Wine-11.0-v85-Stable.wcp
