@@ -23,19 +23,31 @@ jobs:
         sudo apt-get install -y cmake ninja-build python3
 
     - name: Setup LLVM-MinGW Toolchain
-      # FEX requires a modern Clang/LLVM-MinGW toolchain that supports arm64ec
       run: |
+        # Download specific release known to have recent LLVM
         wget https://github.com/mstorsjo/llvm-mingw/releases/download/20240917/llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
         tar -xf llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
-        # Add toolchain to PATH for subsequent steps
-        echo "$(pwd)/llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64/bin" >> $GITHUB_PATH
+        
+        # Rename to simple folder 'llvm-mingw' for easier handling
+        mv llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64 llvm-mingw
+        
+        # DEBUG: List the bin folder so we can see if arm64ec wrapper exists
+        echo "Listing toolchain binaries:"
+        ls llvm-mingw/bin
 
     - name: Build libarm64ec.dll (ARM64EC)
       run: |
+        # 1. FORCE PATH: Add the compiler to PATH explicitly for this step
+        export PATH="${{ github.workspace }}/llvm-mingw/bin:$PATH"
+        
         mkdir build-arm64ec
         cd build-arm64ec
         
-        # Configure for ARM64EC (Windows on ARM64)
+        # 2. Configure for ARM64EC
+        # Note: If the build fails claiming 'arm64ec-w64-mingw32-clang' is missing,
+        # it means we need to use 'clang' with a -target flag instead.
+        # But setting the PATH above should fix the 'Not Found' error.
+        
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_TOOLCHAIN_FILE=../Data/CMake/toolchain_mingw.cmake \
@@ -45,15 +57,16 @@ jobs:
           -DBUILD_TESTING=False
           
         ninja
-        # Note: The output filename in FEX source is usually libarm64ecfex.dll
-        # We will rename it during packaging to match your 'libarm64ec.dll'
 
     - name: Build libwow64fex.dll (WOW64)
       run: |
+        # 1. FORCE PATH: Add the compiler to PATH explicitly for this step
+        export PATH="${{ github.workspace }}/llvm-mingw/bin:$PATH"
+        
         mkdir build-wow64
         cd build-wow64
         
-        # Configure for AArch64 (Wine WOW64 Module)
+        # 2. Configure for AArch64 (WOW64)
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_TOOLCHAIN_FILE=../Data/CMake/toolchain_mingw.cmake \
@@ -66,21 +79,17 @@ jobs:
 
     - name: Prepare Package
       run: |
-        # 1. Capture Commit Hash and Date
         COMMIT_HASH=$(git rev-parse --short HEAD)
         BUILD_DATE=$(date +'%Y-%m-%d')
-
-        # 2. Create Packaging Structure (system32 folder as you requested)
+        
         mkdir -p packaging/system32
         
-        # 3. Copy and Rename Files
-        # Source: build-arm64ec/libarm64ecfex.dll -> Target: libarm64ec.dll
+        # Copy and Rename
+        # FEX build output names might vary slightly, using 'cp' with wildcards or exact paths
         cp build-arm64ec/libarm64ecfex.dll packaging/system32/libarm64ec.dll
-        
-        # Source: build-wow64/libwow64fex.dll -> Target: libwow64fex.dll
         cp build-wow64/libwow64fex.dll packaging/system32/libwow64fex.dll
         
-        # 4. Create profile.json
+        # Create profile.json
         cat <<EOF > packaging/profile.json
         {
           "type": "FEXCore",
