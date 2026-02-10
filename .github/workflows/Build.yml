@@ -16,8 +16,7 @@ jobs:
         repository: doitsujin/dxvk
         path: dxvk
         submodules: recursive
-
-    # REMOVED: "Checkout DXVK GPLAsync" step (It failed because it looked on GitHub)
+        fetch-depth: 0 # Important: fetch full history so we can get correct commit info
 
     - name: Install Dependencies
       run: |
@@ -45,18 +44,25 @@ jobs:
 
     - name: Prepare Package
       run: |
+        # 1. Capture Commit Hash and Date
+        cd dxvk
+        COMMIT_HASH=$(git rev-parse --short HEAD)
+        BUILD_DATE=$(date +'%Y-%m-%d')
+        cd ..
+
+        # 2. Setup directories
         mkdir -p packaging/system32 packaging/syswow64
-        # Note: package-release.sh output structure usually puts x64 in 'x64' and x32 in 'x32'
         cp dxvk-built/dxvk-master/x64/*.dll packaging/system32/
         cp dxvk-built/dxvk-master/x32/*.dll packaging/syswow64/
         
-        # Create profile.json with Author field
+        # 3. Create Dynamic profile.json
+        # We use ${GITHUB_RUN_NUMBER} for versionCode so it auto-increments (1, 2, 3...)
         cat <<EOF > packaging/profile.json
         {
           "type": "DXVK",
-          "versionName": "2.7.1-gplasync-nightly",
-          "versionCode": 1,
-          "description": "DXVK Nightly with GPLAsync",
+          "versionName": "2.7.1-gplasync-${COMMIT_HASH}",
+          "versionCode": ${{ github.run_number }},
+          "description": "DXVK Nightly (GPLAsync)\nCommit: ${COMMIT_HASH}\nDate: ${BUILD_DATE}",
           "author": "Blank",
           "files": [
             { "source": "system32/d3d9.dll", "target": "\${system32}/d3d9.dll" },
@@ -72,13 +78,17 @@ jobs:
         EOF
 
     - name: Create WCP Package
+      # We put the commit hash in the filename too for easier file management
       run: |
-        tar -cJf dxvk-gplasync-nightly.wcp -C packaging .
+        cd dxvk
+        COMMIT_HASH=$(git rev-parse --short HEAD)
+        cd ..
+        tar -cJf dxvk-gplasync-${COMMIT_HASH}.wcp -C packaging .
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
         name: dxvk-nightly-build
         path: |
-          dxvk-gplasync-nightly.wcp
+          *.wcp
           changelog.txt
