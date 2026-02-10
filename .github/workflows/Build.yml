@@ -24,34 +24,34 @@ jobs:
 
     - name: Setup LLVM-MinGW Toolchain
       run: |
-        # Download specific release known to have recent LLVM
+        # Download the specific release of LLVM-MinGW
         wget https://github.com/mstorsjo/llvm-mingw/releases/download/20240917/llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
         tar -xf llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
-        
-        # Rename to simple folder 'llvm-mingw' for easier handling
         mv llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64 llvm-mingw
-        
-        # DEBUG: List the bin folder so we can see if arm64ec wrapper exists
-        echo "Listing toolchain binaries:"
-        ls llvm-mingw/bin
 
     - name: Build libarm64ec.dll (ARM64EC)
       run: |
-        # 1. FORCE PATH: Add the compiler to PATH explicitly for this step
-        export PATH="${{ github.workspace }}/llvm-mingw/bin:$PATH"
+        # 1. Define absolute path to clang
+        TOOLCHAIN_PATH="$(pwd)/llvm-mingw"
+        CLANG_BIN="$TOOLCHAIN_PATH/bin/clang"
+        CLANGXX_BIN="$TOOLCHAIN_PATH/bin/clang++"
+        
+        # 2. Add to PATH just in case other tools (ar, ranlib) are needed
+        export PATH="$TOOLCHAIN_PATH/bin:$PATH"
         
         mkdir build-arm64ec
         cd build-arm64ec
         
-        # 2. Configure for ARM64EC
-        # Note: If the build fails claiming 'arm64ec-w64-mingw32-clang' is missing,
-        # it means we need to use 'clang' with a -target flag instead.
-        # But setting the PATH above should fix the 'Not Found' error.
-        
+        # 3. Configure CMake with EXPLICIT compiler paths
+        # We override the toolchain's attempt to find the wrapper script.
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_TOOLCHAIN_FILE=../Data/CMake/toolchain_mingw.cmake \
           -DMINGW_TRIPLE=arm64ec-w64-mingw32 \
+          -DCMAKE_C_COMPILER="$CLANG_BIN" \
+          -DCMAKE_CXX_COMPILER="$CLANGXX_BIN" \
+          -DCMAKE_C_COMPILER_TARGET="arm64ec-w64-mingw32" \
+          -DCMAKE_CXX_COMPILER_TARGET="arm64ec-w64-mingw32" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
@@ -60,17 +60,23 @@ jobs:
 
     - name: Build libwow64fex.dll (WOW64)
       run: |
-        # 1. FORCE PATH: Add the compiler to PATH explicitly for this step
-        export PATH="${{ github.workspace }}/llvm-mingw/bin:$PATH"
+        TOOLCHAIN_PATH="$(pwd)/llvm-mingw"
+        CLANG_BIN="$TOOLCHAIN_PATH/bin/clang"
+        CLANGXX_BIN="$TOOLCHAIN_PATH/bin/clang++"
+        export PATH="$TOOLCHAIN_PATH/bin:$PATH"
         
         mkdir build-wow64
         cd build-wow64
         
-        # 2. Configure for AArch64 (WOW64)
+        # Configure for AArch64 (WOW64)
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_TOOLCHAIN_FILE=../Data/CMake/toolchain_mingw.cmake \
           -DMINGW_TRIPLE=aarch64-w64-mingw32 \
+          -DCMAKE_C_COMPILER="$CLANG_BIN" \
+          -DCMAKE_CXX_COMPILER="$CLANGXX_BIN" \
+          -DCMAKE_C_COMPILER_TARGET="aarch64-w64-mingw32" \
+          -DCMAKE_CXX_COMPILER_TARGET="aarch64-w64-mingw32" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
@@ -85,9 +91,11 @@ jobs:
         mkdir -p packaging/system32
         
         # Copy and Rename
-        # FEX build output names might vary slightly, using 'cp' with wildcards or exact paths
-        cp build-arm64ec/libarm64ecfex.dll packaging/system32/libarm64ec.dll
-        cp build-wow64/libwow64fex.dll packaging/system32/libwow64fex.dll
+        # Note: We check both possible output names just to be safe
+        [ -f build-arm64ec/libarm64ecfex.dll ] && cp build-arm64ec/libarm64ecfex.dll packaging/system32/libarm64ec.dll
+        [ -f build-arm64ec/libarm64ec.dll ] && cp build-arm64ec/libarm64ec.dll packaging/system32/libarm64ec.dll
+        
+        [ -f build-wow64/libwow64fex.dll ] && cp build-wow64/libwow64fex.dll packaging/system32/libwow64fex.dll
         
         # Create profile.json
         cat <<EOF > packaging/profile.json
