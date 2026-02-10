@@ -17,21 +17,21 @@ jobs:
         path: dxvk
         submodules: recursive
 
-    - name: Checkout DXVK GPLAsync
-      uses: actions/checkout@v4
-      with:
-        repository: Ph42oN/dxvk-gplasync
-        path: dxvk-gplasync
+    # REMOVED: "Checkout DXVK GPLAsync" step (It failed because it looked on GitHub)
 
     - name: Install Dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y meson ninja-build mingw-w64 glslang-tools wine
 
-    - name: Apply Patch
+    - name: Download and Apply Patch
       run: |
         cd dxvk
-        git apply ../dxvk-gplasync/patches/dxvk-gplasync-master.patch
+        # Download the RAW patch file directly from GitLab
+        wget https://gitlab.com/Ph42oN/dxvk-gplasync/-/raw/main/patches/dxvk-gplasync-master.patch
+        
+        # Apply the patch
+        git apply dxvk-gplasync-master.patch
 
     - name: Build DXVK
       run: |
@@ -46,6 +46,7 @@ jobs:
     - name: Prepare Package
       run: |
         mkdir -p packaging/system32 packaging/syswow64
+        # Note: package-release.sh output structure usually puts x64 in 'x64' and x32 in 'x32'
         cp dxvk-built/dxvk-master/x64/*.dll packaging/system32/
         cp dxvk-built/dxvk-master/x32/*.dll packaging/syswow64/
         
@@ -53,9 +54,9 @@ jobs:
         cat <<EOF > packaging/profile.json
         {
           "type": "DXVK",
-          "versionName": "2.7.1-gplasync",
+          "versionName": "2.7.1-gplasync-nightly",
           "versionCode": 1,
-          "description": "dxvk 2.7.1-gplasync",
+          "description": "DXVK Nightly with GPLAsync",
           "author": "Blank",
           "files": [
             { "source": "system32/d3d9.dll", "target": "\${system32}/d3d9.dll" },
