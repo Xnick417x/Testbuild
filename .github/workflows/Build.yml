@@ -17,10 +17,16 @@ jobs:
 
     - name: Setup Toolchain (Full LLVM-MinGW)
       run: |
-        # Download the toolchain that contains the ARM64EC libraries
+        # 1. Download the toolchain
         wget -q https://github.com/mstorsjo/llvm-mingw/releases/download/20240917/llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
         tar -xf llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
+        
+        # 2. Rename to 'toolchain' for simplicity
         mv llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64 toolchain
+        
+        # 3. Add 'toolchain/bin' to the Github Actions PATH
+        # This allows CMake to simply find 'clang' and 'llvm-ar' without complex paths.
+        echo "$(pwd)/toolchain/bin" >> $GITHUB_PATH
 
     - name: Checkout FEX
       uses: actions/checkout@v4
@@ -50,19 +56,20 @@ jobs:
         echo "::group::Building ARM64EC"
         rm -rf build_ec
         
-        # We explicitly point to the 'clang' executable that WE KNOW exists.
-        # We DO NOT use the toolchain file because it looks for the wrong names.
-        TC_BIN="$(pwd)/toolchain/bin"
+        # CRITICAL FIX: 
+        # 1. We use "clang" (which is now in PATH).
+        # 2. We pass "--target=arm64ec..." in flags.
+        # 3. We use "-static" to prevent the shutdown crash.
         
         cmake -B build_ec -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_SYSTEM_NAME=Windows \
           -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
-          -DCMAKE_C_COMPILER="$TC_BIN/clang" \
-          -DCMAKE_CXX_COMPILER="$TC_BIN/clang++" \
-          -DCMAKE_RC_COMPILER="$TC_BIN/llvm-windres" \
-          -DCMAKE_AR="$TC_BIN/llvm-ar" \
-          -DCMAKE_RANLIB="$TC_BIN/llvm-ranlib" \
+          -DCMAKE_C_COMPILER=clang \
+          -DCMAKE_CXX_COMPILER=clang++ \
+          -DCMAKE_RC_COMPILER=llvm-windres \
+          -DCMAKE_AR=llvm-ar \
+          -DCMAKE_RANLIB=llvm-ranlib \
           -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00 --target=arm64ec-w64-mingw32" \
           -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00 --target=arm64ec-w64-mingw32" \
           -DCMAKE_SHARED_LINKER_FLAGS="-static -fuse-ld=lld --target=arm64ec-w64-mingw32" \
@@ -78,17 +85,16 @@ jobs:
       run: |
         echo "::group::Building AARCH64"
         rm -rf build_wow
-        TC_BIN="$(pwd)/toolchain/bin"
         
         cmake -B build_wow -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_SYSTEM_NAME=Windows \
           -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
-          -DCMAKE_C_COMPILER="$TC_BIN/clang" \
-          -DCMAKE_CXX_COMPILER="$TC_BIN/clang++" \
-          -DCMAKE_RC_COMPILER="$TC_BIN/llvm-windres" \
-          -DCMAKE_AR="$TC_BIN/llvm-ar" \
-          -DCMAKE_RANLIB="$TC_BIN/llvm-ranlib" \
+          -DCMAKE_C_COMPILER=clang \
+          -DCMAKE_CXX_COMPILER=clang++ \
+          -DCMAKE_RC_COMPILER=llvm-windres \
+          -DCMAKE_AR=llvm-ar \
+          -DCMAKE_RANLIB=llvm-ranlib \
           -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00 --target=aarch64-w64-mingw32" \
           -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00 --target=aarch64-w64-mingw32" \
           -DCMAKE_SHARED_LINKER_FLAGS="-static -fuse-ld=lld --target=aarch64-w64-mingw32" \
@@ -103,7 +109,6 @@ jobs:
       run: |
         rm -rf final_package
         mkdir -p final_package/system32
-        TC_BIN="$(pwd)/toolchain/bin"
         
         # 1. Grab DLL from Pass 1 (ARM64EC) -> This IS libarm64ecfex.dll
         DLL_EC=$(find build_ec -name "libFEXCore.dll" | head -n 1)
@@ -119,8 +124,8 @@ jobs:
             cp "$DLL_WOW" final_package/system32/libwow64fex.dll
             
             # Strip
-            "$TC_BIN/llvm-strip" --strip-all final_package/system32/libarm64ecfex.dll
-            "$TC_BIN/llvm-strip" --strip-all final_package/system32/libwow64fex.dll
+            llvm-strip --strip-all final_package/system32/libarm64ecfex.dll
+            llvm-strip --strip-all final_package/system32/libwow64fex.dll
         else
             echo "::error::Missing build outputs!"
             echo "EC Build Found? $DLL_EC"
