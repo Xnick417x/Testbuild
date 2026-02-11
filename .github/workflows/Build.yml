@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Stable container (Clang 19) to avoid the 'GetActiveProcessorCount' linker error found in newer versions.
+    # VITAL: Use the stable 20240917 container.
     container: mstorsjo/llvm-mingw:20240917
 
     steps:
@@ -16,6 +16,10 @@ jobs:
       run: |
         apt-get update -y
         apt-get install -y git python3 ninja-build pkg-config python3-packaging python3-setuptools
+
+    - name: Set Toolchain Path
+      # FIX: Explicitly add the compiler path to GITHUB_PATH so CMake can find arm64ec-w64-mingw32-clang
+      run: echo "/opt/llvm-mingw/bin" >> $GITHUB_PATH
 
     - name: Checkout FEX
       uses: actions/checkout@v4
@@ -25,16 +29,14 @@ jobs:
         fetch-depth: 0
 
     - name: Patch WinNT Header Typo
-      # FIX: The FEX source header has a typo. This sed command accurately targets the 
-      # missing underscores to match the internal definition.
+      # FIX: Corrects the internal FEX typo that causes "unknown type name" errors in stable compilers.
       run: |
         sed -i 's/IMAGE_LOAD_CONFIG_CODE_INTEGRITY CodeIntegrity;/___IMAGE_LOAD_CONFIG_CODE_INTEGRITY CodeIntegrity;/g' Source/Windows/include/winnt.h
 
     - name: Build FEXCore (ARM64EC)
       run: |
-        # STRATEGY: Use the official FEX toolchain with the ARM64EC triple.
-        # This is the ONLY supported way to build FEX for Windows-on-ARM/Winlator.
-        
+        # Using the official FEX toolchain with the ARM64EC triple.
+        # This builds both libarm64ecfex.dll and libwow64fex.dll.
         cmake -B build -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
@@ -51,26 +53,23 @@ jobs:
         git config --global --add safe.directory '*'
         COMMIT_HASH=$(git rev-parse --short HEAD)
         BUILD_DATE=$(date +'%Y-%m-%d')
+        # Use run_number to ensure the versionCode always increases, like in your DXVK builds
+        VERSION_CODE=${{ github.run_number }}
         
-        # Create a clean folder structure as per your extracted working version
-        rm -rf final_package
         mkdir -p final_package/system32
         
-        # 1. Copy the ARM64EC DLL and the WOW64 bridge DLL
-        # In ARM64EC builds, FEX outputs the core as libarm64ecfex.dll
-        cp build/Bin/libarm64ecfex.dll final_package/system32/libarm64ecfex.dll || \
-        find build -name "libFEXCore.dll" -exec cp {} final_package/system32/libarm64ecfex.dll \;
+        # 1. Copy the ARM64EC DLLs
+        # These are generated in build/Bin
+        cp build/Bin/libarm64ecfex.dll final_package/system32/libarm64ecfex.dll
+        cp build/Bin/libwow64fex.dll final_package/system32/libwow64fex.dll
         
-        cp build/Bin/libwow64fex.dll final_package/system32/libwow64fex.dll || \
-        find build -name "libwow64fex.dll" -exec cp {} final_package/system32/libwow64fex.dll \;
-        
-        # 2. Create the profile.json (Matches your working example exactly)
+        # 2. Create profile.json (Mirrors your DXVK nightly style)
         cat <<EOF > final_package/profile.json
         {
           "type": "FEXCore",
           "versionName": "Nightly-${COMMIT_HASH}",
-          "versionCode": ${{ github.run_number }},
-          "description": "FEXCore Nightly Release\nLatest Commits from Main\nBuild Date: ${BUILD_DATE}\nTarget: arm64ec-w64-mingw32",
+          "versionCode": ${VERSION_CODE},
+          "description": "FEXCore Nightly Build\nLatest Commits from Main\nCommit: ${COMMIT_HASH}\nBuild Date: ${BUILD_DATE}\nTarget: ARM64EC (Hybrid)",
           "author": "FEX-Emu / Gemini",
           "files": [
             {
@@ -89,7 +88,7 @@ jobs:
       run: |
         COMMIT_HASH=$(git rev-parse --short HEAD)
         cd final_package
-        # Compression must happen inside the folder so profile.json is at the root
+        # Compress as .tar.xz (packaged as .wcp) with contents at root
         tar -cJf ../FEXCore-Nightly-${COMMIT_HASH}.wcp .
 
     - name: Upload Artifacts
