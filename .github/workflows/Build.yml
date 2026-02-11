@@ -25,21 +25,21 @@ jobs:
         fetch-depth: 0
 
     - name: Patch WinNT Header
-      # Fixes the typo in the FEX source that breaks the stable compiler.
+      # Fixes the typo in winnt.h as required for stable compilers.
       run: |
         sed -i 's/\bIMAGE_LOAD_CONFIG_CODE_INTEGRITY/__IMAGE_LOAD_CONFIG_CODE_INTEGRITY/g' Source/Windows/include/winnt.h
 
-    - name: Build FEXCore (ARM64EC Official)
+    - name: Build FEXCore (Official ARM64EC)
       run: |
-        # Ensure the compiler is in the PATH for this step.
-        export PATH="/opt/llvm-mingw/bin:$PATH"
+        # Hard-coding the path and triple variables so CMake can't fail to find them.
+        # This uses the official toolchain file (Data/CMake/toolchain_mingw.cmake).
         
-        # We use the OFFICIAL toolchain file but switch to the 'arm64ec' triple.
-        # This is the "Fix" for the instant shutdown.
         cmake -B build -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
           -DMINGW_TRIPLE=arm64ec-w64-mingw32 \
+          -DCMAKE_C_COMPILER=/opt/llvm-mingw/bin/arm64ec-w64-mingw32-clang \
+          -DCMAKE_CXX_COMPILER=/opt/llvm-mingw/bin/arm64ec-w64-mingw32-clang++ \
           -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00" \
           -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00" \
           -DENABLE_LTO=False \
@@ -55,18 +55,18 @@ jobs:
         
         mkdir -p final_package/system32
         
-        # 1. Copy DLLs (Matching your working JSON names exactly).
-        # Building with arm64ec triple creates the specific hybrid binaries Winlator needs.
+        # Copy DLLs (Matching your working JSON exactly).
+        # Building as ARM64EC creates the libarm64ecfex.dll hybrid binary.
         cp build/Bin/libarm64ecfex.dll final_package/system32/libarm64ecfex.dll
         cp build/Bin/libwow64fex.dll final_package/system32/libwow64fex.dll
         
-        # 2. Create profile.json (Clean version, no share folder).
+        # profile.json (Clean, no share folder, matches your provided working file).
         cat <<EOF > final_package/profile.json
         {
           "type": "FEXCore",
           "versionName": "Nightly-${COMMIT_HASH}",
           "versionCode": ${{ github.run_number }},
-          "description": "FEXCore Nightly Build\nCommit: ${COMMIT_HASH}\nBuild Date: ${BUILD_DATE}\nTarget: ARM64EC (Hybrid)",
+          "description": "FEXCore Nightly Release\nCommit: ${COMMIT_HASH}\nBuild Date: ${BUILD_DATE}\nTarget: ARM64EC",
           "author": "FEX-Emu / Gemini",
           "files": [
             {
