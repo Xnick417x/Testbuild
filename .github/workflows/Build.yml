@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: mstorsjo/llvm-mingw:latest
+    container: mstorsjo/llvm-mingw:20240917
 
     steps:
     - name: Install Dependencies
@@ -23,70 +23,63 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
-    - name: Fix RtlIsEcCode (Source Patch)
-      # This fixes the "undeclared identifier" error by safely inserting the declaration
-      # before the FEXCore namespace starts. We use 'unsigned char' to avoid type issues.
+    - name: Set Dynamic Version Info
+      id: version
       run: |
-        sed -i '/namespace FEXCore/i extern "C" unsigned char RtlIsEcCode(unsigned long long);' FEXCore/Source/Interface/Core/Frontend.cpp
+        echo "COMMIT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+        echo "BUILD_DATE=$(date +'%Y.%m.%d')" >> $GITHUB_ENV
 
     - name: Patch WinNT Header
-      # Fixes the typo in winnt.h to prevent compiler errors
+      # Fixes the IMAGE_LOAD_CONFIG_CODE_INTEGRITY collision in mingw headers
       run: |
         sed -i 's/\bIMAGE_LOAD_CONFIG_CODE_INTEGRITY/__IMAGE_LOAD_CONFIG_CODE_INTEGRITY/g' Source/Windows/include/winnt.h
 
-    - name: Create Toolchain File
-      # We define the toolchain MANUALLY. This fixes the "Compiler Not Found" error
-      # by mapping the standard triples to the container's internal paths.
+    - name: Build FEXCore (ARM64 Host)
       run: |
-        cat <<EOF > mingw_toolchain.cmake
-        set(CMAKE_SYSTEM_NAME Windows)
-        set(CMAKE_SYSTEM_PROCESSOR arm64ec)
-        set(CMAKE_C_COMPILER aarch64-w64-mingw32-clang)
-        set(CMAKE_CXX_COMPILER aarch64-w64-mingw32-clang++)
-        set(CMAKE_RC_COMPILER aarch64-w64-mingw32-windres)
-        set(CMAKE_CROSSCOMPILING TRUE)
-        EOF
-
-    - name: Build FEXCore (ARM64EC)
-      run: |
-        # PATH FIX: Ensure the bin folder is explicitly in the path for this step
-        export PATH="/opt/llvm-mingw/bin:$PATH"
-        
-        # Build using the manual toolchain.
         cmake -B build -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_TOOLCHAIN_FILE=mingw_toolchain.cmake \
-          -D_WIN32_WINNT=0x0A00 \
-          -DENABLE_LTO=OFF \
-          -DBUILD_TESTING=OFF \
-          -DENABLE_ASSERTIONS=OFF
+          -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
+          -DMINGW_TRIPLE=aarch64-w64-mingw32 \
+          -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00" \
+          -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00" \
+          -DCMAKE_INSTALL_PREFIX=./install \
+          -DENABLE_LTO=False \
+          -DBUILD_TESTING=False
           
         cmake --build build
 
     - name: Prepare Packaging Directory
       run: |
         git config --global --add safe.directory '*'
-        COMMIT_HASH=$(git rev-parse --short HEAD)
-        BUILD_DATE=$(date +'%Y-%m-%d')
         
+        # Clean previous attempts
+        rm -rf final_package
         mkdir -p final_package/system32
+
+        # --- DLL Handling ---
+        # We need to grab the built libFEXCore.dll and rename it for both usages.
+        # 1. libarm64ecfex.dll (ARM64EC Interface)
+        # 2. libwow64fex.dll (WOW64 Interface)
         
-        # Copy DLLs (Standard MinGW output names renamed to your format)
-        # We check multiple locations to be safe
-        find build -name "libFEXCore.dll" -exec cp {} final_package/system32/libarm64ecfex.dll \;
-        find build -name "libwow64fex.dll" -exec cp {} final_package/system32/libwow64fex.dll \;
+        SOURCE_DLL=$(find build -name "libFEXCore.dll" | head -n 1)
         
-        # Fallback if find fails (Explicit paths)
-        [ ! -f final_package/system32/libarm64ecfex.dll ] && cp build/Bin/libFEXCore.dll final_package/system32/libarm64ecfex.dll || true
-        [ ! -f final_package/system32/libwow64fex.dll ] && cp build/Bin/libwow64fex.dll final_package/system32/libwow64fex.dll || true
-        
-        # Create profile.json (Matches your uploaded file exactly)
+        if [ -f "$SOURCE_DLL" ]; then
+            echo "Found FEXCore at: $SOURCE_DLL"
+            cp "$SOURCE_DLL" final_package/system32/libarm64ecfex.dll
+            cp "$SOURCE_DLL" final_package/system32/libwow64fex.dll
+        else
+            echo "ERROR: libFEXCore.dll not found! Build failed?"
+            exit 1
+        fi
+
+        # --- Dynamic Profile Creation ---
+        # Matches the 'dxvk' style versioning you requested
         cat <<EOF > final_package/profile.json
         {
           "type": "FEXCore",
-          "versionName": "Nightly-${COMMIT_HASH}",
+          "versionName": "Nightly-v${{ env.BUILD_DATE }}-${{ env.COMMIT_HASH }}",
           "versionCode": ${{ github.run_number }},
-          "description": "FEXCore Nightly Release\nCommit: ${COMMIT_HASH}\nBuild Date: ${BUILD_DATE}\nTarget: ARM64EC (Snapdragon 8 Elite)",
+          "description": "FEXCore Nightly Release\nCommit: ${{ env.COMMIT_HASH }}\nDate: ${{ env.BUILD_DATE }}\nOptimized for Winlator/Ludashi (Snapdragon 8 Elite)",
           "author": "FEX-Emu / Gemini",
           "files": [
             {
@@ -103,9 +96,9 @@ jobs:
 
     - name: Create WCP Package
       run: |
-        COMMIT_HASH=$(git rev-parse --short HEAD)
         cd final_package
-        tar -cJf ../FEXCore-Nightly-${COMMIT_HASH}.wcp .
+        # Create the WCP (tar.xz) with the dynamic name
+        tar -cJf ../FEXCore-Nightly-v${{ env.BUILD_DATE }}-${{ env.COMMIT_HASH }}.wcp .
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
