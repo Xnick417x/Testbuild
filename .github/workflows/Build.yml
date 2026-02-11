@@ -23,30 +23,30 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
-    - name: Generate Dynamic Version
+    - name: Generate Version Name
       id: version
       run: |
         git config --global --add safe.directory '*'
-        # Fetch tags to find the latest stable release
         git fetch --tags
         
-        # Get latest tag (e.g., FEX-2602), failing back to "v0.1" if none found
-        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1")
+        # 1. Get latest stable tag (e.g. FEX-2602)
+        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "FEX-Unknown")
+        
+        # 2. Get short commit hash
         COMMIT_HASH=$(git rev-parse --short HEAD)
         
-        # Format: [StableTag]-Nightly-[Commit]
-        # Example: FEX-2602-Nightly-1af27ec
+        # 3. Format: [Tag]-Nightly-[Commit] (e.g., FEX-2602-Nightly-1af27ec)
         VERSION_NAME="${LATEST_TAG}-Nightly-${COMMIT_HASH}"
         
         echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
         echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
 
     - name: Patch WinNT Header
-      # Required for current FEX builds on MinGW to prevent macro redefinition errors
       run: |
         sed -i 's/\bIMAGE_LOAD_CONFIG_CODE_INTEGRITY/__IMAGE_LOAD_CONFIG_CODE_INTEGRITY/g' Source/Windows/include/winnt.h
 
-    - name: Build FEXCore (Release)
+    - name: Build FEXCore (Static Link)
+      # CRITICAL FIX: Added "-static" to linker flags to bundle all dependencies.
       run: |
         cmake -B build -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
@@ -54,38 +54,33 @@ jobs:
           -DMINGW_TRIPLE=aarch64-w64-mingw32 \
           -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00" \
           -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00" \
+          -DCMAKE_SHARED_LINKER_FLAGS="-static" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
 
         cmake --build build
 
-    - name: Prepare & Strip Package
+    - name: Package & Strip
       run: |
-        # 1. Setup Directories
         rm -rf final_package
         mkdir -p final_package/system32
         
-        # 2. Find and STRIP the binary
-        # Stripping is crucial. Unstripped binaries can cause Winlator to crash on load.
         SOURCE_DLL=$(find build -name "libFEXCore.dll" | head -n 1)
         
         if [ -f "$SOURCE_DLL" ]; then
-            # Copy to generic name first
-            cp "$SOURCE_DLL" fex_host.dll
+            # Strip is required to prevent memory crashes
+            llvm-strip --strip-all "$SOURCE_DLL" -o fex_stripped.dll
             
-            # Strip debug symbols to reduce size and fix loading issues
-            llvm-strip --strip-all fex_host.dll
-            
-            # Copy to final destinations
-            cp fex_host.dll final_package/system32/libarm64ecfex.dll
-            cp fex_host.dll final_package/system32/libwow64fex.dll
+            # Copy to both required filenames
+            cp fex_stripped.dll final_package/system32/libarm64ecfex.dll
+            cp fex_stripped.dll final_package/system32/libwow64fex.dll
         else
             echo "::error::Build failed, libFEXCore.dll not found"
             exit 1
         fi
 
-        # 3. Create JSON with corrected naming
+        # Generate profile.json with your specific naming
         cat <<EOF > final_package/profile.json
         {
           "type": "FEXCore",
@@ -106,14 +101,13 @@ jobs:
         }
         EOF
 
-    - name: Create WCP Package
+    - name: Create WCP
       run: |
         cd final_package
         tar -cJf ../${{ env.VERSION_NAME }}.wcp .
 
-    - name: Upload Artifacts
+    - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: fexcore-nightly
-        path: |
-          *.wcp
+        path: *.wcp
