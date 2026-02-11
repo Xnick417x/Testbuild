@@ -8,7 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # We DO NOT use the container line. We install the toolchain manually below.
 
     steps:
     - name: Install Dependencies
@@ -16,16 +15,23 @@ jobs:
         sudo apt-get update -y
         sudo apt-get install -y git python3 ninja-build pkg-config python3-packaging python3-setuptools wget tar
 
-    - name: Setup LLVM-MinGW Toolchain (Full Release)
+    - name: Setup Toolchain (Manual)
       run: |
-        # 1. Download the FULL release.
-        # The container we used before was "Lite" and missing ARM64EC libraries. This fixes that.
+        # Download the specific LLVM-MinGW release that supports ARM64EC
         wget -q https://github.com/mstorsjo/llvm-mingw/releases/download/20240917/llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
         tar -xf llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
         
-        # 2. Add the toolchain to the system PATH
-        # This allows CMake to find 'clang', 'llvm-ar', and the missing 'arm64ec' targets.
-        echo "$(pwd)/llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64/bin" >> $GITHUB_PATH
+        # Rename for easier handling
+        mv llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64 toolchain
+        
+        # CRITICAL: Create the arm64ec symlinks MANUALLY inside the bin folder
+        # This is why the detection failed before - the binary literally has the wrong name
+        cd toolchain/bin
+        ln -sf clang arm64ec-w64-mingw32-clang
+        ln -sf clang++ arm64ec-w64-mingw32-clang++
+        ln -sf llvm-ar arm64ec-w64-mingw32-ar
+        ln -sf llvm-windres arm64ec-w64-mingw32-windres
+        ln -sf llvm-strip arm64ec-w64-mingw32-strip
 
     - name: Checkout FEX
       uses: actions/checkout@v4
@@ -41,7 +47,6 @@ jobs:
         git fetch --tags
         LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "FEX-Unknown")
         COMMIT_HASH=$(git rev-parse --short HEAD)
-        
         echo "VERSION_NAME=${LATEST_TAG}-Nightly-${COMMIT_HASH}" >> $GITHUB_ENV
         echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
 
@@ -50,19 +55,26 @@ jobs:
         sed -i 's/\bIMAGE_LOAD_CONFIG_CODE_INTEGRITY/__IMAGE_LOAD_CONFIG_CODE_INTEGRITY/g' Source/Windows/include/winnt.h
 
     # --- PASS 1: Build ARM64EC (Host Engine) ---
-    # This builds the main emulator core using the ARM64EC target we just downloaded.
     - name: Build Pass 1 - ARM64EC
       run: |
         echo "::group::Building ARM64EC"
         rm -rf build_ec
         
+        # Absolute path to our manually fixed toolchain
+        TC_PATH="$(pwd)/toolchain/bin"
+        
+        # We explicitly point CMake to the compilers we just symlinked
         cmake -B build_ec -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
-          -DMINGW_TRIPLE=arm64ec-w64-mingw32 \
-          -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00" \
-          -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00" \
-          -DCMAKE_SHARED_LINKER_FLAGS="-static" \
+          -DCMAKE_SYSTEM_NAME=Windows \
+          -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+          -DCMAKE_C_COMPILER="$TC_PATH/arm64ec-w64-mingw32-clang" \
+          -DCMAKE_CXX_COMPILER="$TC_PATH/arm64ec-w64-mingw32-clang++" \
+          -DCMAKE_RC_COMPILER="$TC_PATH/arm64ec-w64-mingw32-windres" \
+          -DCMAKE_AR="$TC_PATH/arm64ec-w64-mingw32-ar" \
+          -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00 --target=arm64ec-w64-mingw32" \
+          -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00 --target=arm64ec-w64-mingw32" \
+          -DCMAKE_SHARED_LINKER_FLAGS="-static -fuse-ld=lld" \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
 
@@ -70,19 +82,23 @@ jobs:
         echo "::endgroup::"
 
     # --- PASS 2: Build AARCH64 (WOW64 Bridge) ---
-    # This builds the bridge that lets 32-bit apps talk to the 64-bit host.
     - name: Build Pass 2 - AARCH64 (WOW64)
       run: |
         echo "::group::Building AARCH64"
         rm -rf build_wow
+        TC_PATH="$(pwd)/toolchain/bin"
         
         cmake -B build_wow -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
-          -DMINGW_TRIPLE=aarch64-w64-mingw32 \
-          -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00" \
-          -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00" \
-          -DCMAKE_SHARED_LINKER_FLAGS="-static" \
+          -DCMAKE_SYSTEM_NAME=Windows \
+          -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+          -DCMAKE_C_COMPILER="$TC_PATH/clang" \
+          -DCMAKE_CXX_COMPILER="$TC_PATH/clang++" \
+          -DCMAKE_RC_COMPILER="$TC_PATH/llvm-windres" \
+          -DCMAKE_AR="$TC_PATH/llvm-ar" \
+          -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00 --target=aarch64-w64-mingw32" \
+          -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00 --target=aarch64-w64-mingw32" \
+          -DCMAKE_SHARED_LINKER_FLAGS="-static -fuse-ld=lld" \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
 
@@ -93,6 +109,7 @@ jobs:
       run: |
         rm -rf final_package
         mkdir -p final_package/system32
+        TC_PATH="$(pwd)/toolchain/bin"
         
         # 1. Grab DLL from Pass 1 (ARM64EC) -> This IS libarm64ecfex.dll
         DLL_EC=$(find build_ec -name "libFEXCore.dll" | head -n 1)
@@ -107,9 +124,9 @@ jobs:
             cp "$DLL_EC" final_package/system32/libarm64ecfex.dll
             cp "$DLL_WOW" final_package/system32/libwow64fex.dll
             
-            # Strip them (llvm-strip is in our PATH now)
-            llvm-strip --strip-all final_package/system32/libarm64ecfex.dll
-            llvm-strip --strip-all final_package/system32/libwow64fex.dll
+            # Strip them using our toolchain strip
+            "$TC_PATH/llvm-strip" --strip-all final_package/system32/libarm64ecfex.dll
+            "$TC_PATH/llvm-strip" --strip-all final_package/system32/libwow64fex.dll
         else
             echo "::error::Missing build outputs!"
             echo "EC Build Found? $DLL_EC"
