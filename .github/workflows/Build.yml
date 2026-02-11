@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # VITAL: Using the 20240917 container to avoid broken Clang 22 linker issues
+    # VITAL: Using the stable 20240917 container to fix the Clang 22 linker regression.
     container: mstorsjo/llvm-mingw:20240917
 
     steps:
@@ -16,10 +16,6 @@ jobs:
       run: |
         apt-get update -y
         apt-get install -y git python3 ninja-build pkg-config python3-packaging python3-setuptools
-
-    - name: Set Toolchain Environment
-      # This ensures the compilers are accessible throughout the job
-      run: echo "/opt/llvm-mingw/bin" >> $GITHUB_PATH
 
     - name: Checkout FEX
       uses: actions/checkout@v4
@@ -29,27 +25,27 @@ jobs:
         fetch-depth: 0
 
     - name: Patch WinNT Header
-      # FIX: Corrects the typo in winnt.h to prevent compiler errors
+      # Fixes the typo in the FEX source that breaks the stable compiler.
       run: |
         sed -i 's/\bIMAGE_LOAD_CONFIG_CODE_INTEGRITY/__IMAGE_LOAD_CONFIG_CODE_INTEGRITY/g' Source/Windows/include/winnt.h
 
     - name: Build FEXCore (ARM64EC Official)
       run: |
-        # STRATEGY: Hard-set CC and CXX to their absolute paths to bypass PATH detection
-        export CC=/opt/llvm-mingw/bin/arm64ec-w64-mingw32-clang
-        export CXX=/opt/llvm-mingw/bin/arm64ec-w64-mingw32-clang++
+        # Ensure the compiler is in the PATH for this step.
+        export PATH="/opt/llvm-mingw/bin:$PATH"
         
-        # Using the official toolchain file from the FEX repo
+        # We use the OFFICIAL toolchain file but switch to the 'arm64ec' triple.
+        # This is the "Fix" for the instant shutdown.
         cmake -B build -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
           -DMINGW_TRIPLE=arm64ec-w64-mingw32 \
-          -DCMAKE_INSTALL_PREFIX=./install \
+          -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00" \
+          -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00" \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
           
         cmake --build build
-        cmake --install build
 
     - name: Prepare Packaging Directory
       run: |
@@ -59,17 +55,18 @@ jobs:
         
         mkdir -p final_package/system32
         
-        # Copy DLLs using your working JSON names
+        # 1. Copy DLLs (Matching your working JSON names exactly).
+        # Building with arm64ec triple creates the specific hybrid binaries Winlator needs.
         cp build/Bin/libarm64ecfex.dll final_package/system32/libarm64ecfex.dll
         cp build/Bin/libwow64fex.dll final_package/system32/libwow64fex.dll
         
-        # Build the profile.json like your DXVK Nightly
+        # 2. Create profile.json (Clean version, no share folder).
         cat <<EOF > final_package/profile.json
         {
           "type": "FEXCore",
           "versionName": "Nightly-${COMMIT_HASH}",
           "versionCode": ${{ github.run_number }},
-          "description": "FEXCore Nightly Build\nCommit: ${COMMIT_HASH}\nBuild Date: ${BUILD_DATE}\nTarget: ARM64EC (Stable Toolchain)",
+          "description": "FEXCore Nightly Build\nCommit: ${COMMIT_HASH}\nBuild Date: ${BUILD_DATE}\nTarget: ARM64EC (Hybrid)",
           "author": "FEX-Emu / Gemini",
           "files": [
             {
@@ -88,7 +85,6 @@ jobs:
       run: |
         COMMIT_HASH=$(git rev-parse --short HEAD)
         cd final_package
-        # Ensures profile.json is at the root to fix Winlator "Incomplete Content"
         tar -cJf ../FEXCore-Nightly-${COMMIT_HASH}.wcp .
 
     - name: Upload Artifacts
