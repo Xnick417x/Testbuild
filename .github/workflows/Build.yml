@@ -23,18 +23,30 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
-    - name: Set Dynamic Version Info
+    - name: Generate Dynamic Version
       id: version
       run: |
-        echo "COMMIT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-        echo "BUILD_DATE=$(date +'%Y.%m.%d')" >> $GITHUB_ENV
+        git config --global --add safe.directory '*'
+        # Fetch tags to find the latest stable release
+        git fetch --tags
+        
+        # Get latest tag (e.g., FEX-2602), failing back to "v0.1" if none found
+        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1")
+        COMMIT_HASH=$(git rev-parse --short HEAD)
+        
+        # Format: [StableTag]-Nightly-[Commit]
+        # Example: FEX-2602-Nightly-1af27ec
+        VERSION_NAME="${LATEST_TAG}-Nightly-${COMMIT_HASH}"
+        
+        echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
+        echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
 
     - name: Patch WinNT Header
-      # Fixes the IMAGE_LOAD_CONFIG_CODE_INTEGRITY collision in mingw headers
+      # Required for current FEX builds on MinGW to prevent macro redefinition errors
       run: |
         sed -i 's/\bIMAGE_LOAD_CONFIG_CODE_INTEGRITY/__IMAGE_LOAD_CONFIG_CODE_INTEGRITY/g' Source/Windows/include/winnt.h
 
-    - name: Build FEXCore (ARM64 Host)
+    - name: Build FEXCore (Release)
       run: |
         cmake -B build -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
@@ -45,41 +57,41 @@ jobs:
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
-          
+
         cmake --build build
 
-    - name: Prepare Packaging Directory
+    - name: Prepare & Strip Package
       run: |
-        git config --global --add safe.directory '*'
-        
-        # Clean previous attempts
+        # 1. Setup Directories
         rm -rf final_package
         mkdir -p final_package/system32
-
-        # --- DLL Handling ---
-        # We need to grab the built libFEXCore.dll and rename it for both usages.
-        # 1. libarm64ecfex.dll (ARM64EC Interface)
-        # 2. libwow64fex.dll (WOW64 Interface)
         
+        # 2. Find and STRIP the binary
+        # Stripping is crucial. Unstripped binaries can cause Winlator to crash on load.
         SOURCE_DLL=$(find build -name "libFEXCore.dll" | head -n 1)
         
         if [ -f "$SOURCE_DLL" ]; then
-            echo "Found FEXCore at: $SOURCE_DLL"
-            cp "$SOURCE_DLL" final_package/system32/libarm64ecfex.dll
-            cp "$SOURCE_DLL" final_package/system32/libwow64fex.dll
+            # Copy to generic name first
+            cp "$SOURCE_DLL" fex_host.dll
+            
+            # Strip debug symbols to reduce size and fix loading issues
+            llvm-strip --strip-all fex_host.dll
+            
+            # Copy to final destinations
+            cp fex_host.dll final_package/system32/libarm64ecfex.dll
+            cp fex_host.dll final_package/system32/libwow64fex.dll
         else
-            echo "ERROR: libFEXCore.dll not found! Build failed?"
+            echo "::error::Build failed, libFEXCore.dll not found"
             exit 1
         fi
 
-        # --- Dynamic Profile Creation ---
-        # Matches the 'dxvk' style versioning you requested
+        # 3. Create JSON with corrected naming
         cat <<EOF > final_package/profile.json
         {
           "type": "FEXCore",
-          "versionName": "Nightly-v${{ env.BUILD_DATE }}-${{ env.COMMIT_HASH }}",
+          "versionName": "${{ env.VERSION_NAME }}",
           "versionCode": ${{ github.run_number }},
-          "description": "FEXCore Nightly Release\nCommit: ${{ env.COMMIT_HASH }}\nDate: ${{ env.BUILD_DATE }}\nOptimized for Winlator/Ludashi (Snapdragon 8 Elite)",
+          "description": "FEXCore Nightly Build\nCommit: ${{ env.COMMIT_HASH }}",
           "author": "FEX-Emu / Gemini",
           "files": [
             {
@@ -97,8 +109,7 @@ jobs:
     - name: Create WCP Package
       run: |
         cd final_package
-        # Create the WCP (tar.xz) with the dynamic name
-        tar -cJf ../FEXCore-Nightly-v${{ env.BUILD_DATE }}-${{ env.COMMIT_HASH }}.wcp .
+        tar -cJf ../${{ env.VERSION_NAME }}.wcp .
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
