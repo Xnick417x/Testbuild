@@ -1,4 +1,4 @@
-name: Build FEXCore Nightly (Arihany Replica)
+name: Build FEXCore Nightly (Arihany Stable)
 
 on:
   workflow_dispatch:
@@ -17,22 +17,21 @@ jobs:
 
     - name: Setup Toolchain (Replica of setup-llvm.sh)
       run: |
-        # 1. Use the EXACT version from Arihany's script
+        # 1. Use the EXACT version from Arihany's script (20251104)
         LLVM_MINGW_TAG="20251104"
         TOOLCHAIN_DIR="/opt/llvm-mingw"
         
-        # 2. Download to the specific /opt directory (Requires sudo)
+        # 2. Download to the specific /opt directory
         wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW_TAG/llvm-mingw-$LLVM_MINGW_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
         
         sudo rm -rf "$TOOLCHAIN_DIR"
         sudo mkdir -p "$TOOLCHAIN_DIR"
         sudo tar -C "$TOOLCHAIN_DIR" --strip-components=1 -xJf llvm.tar.xz
         
-        # 3. Add to PATH so CMake can find it
+        # 3. Add to PATH
         echo "$TOOLCHAIN_DIR/bin" >> $GITHUB_PATH
         
-        # 4. CRITICAL: Create the 'arm64ec' symlinks manually
-        # FEX's cmake toolchain looks for 'arm64ec-w64-mingw32-clang'. We ensure it exists.
+        # 4. Create the 'arm64ec' symlinks (Crucial for FEX toolchain file)
         sudo ln -sf "$TOOLCHAIN_DIR/bin/clang" "$TOOLCHAIN_DIR/bin/arm64ec-w64-mingw32-clang"
         sudo ln -sf "$TOOLCHAIN_DIR/bin/clang++" "$TOOLCHAIN_DIR/bin/arm64ec-w64-mingw32-clang++"
         sudo ln -sf "$TOOLCHAIN_DIR/bin/llvm-ar" "$TOOLCHAIN_DIR/bin/arm64ec-w64-mingw32-ar"
@@ -54,8 +53,6 @@ jobs:
         LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "FEX-Unknown")
         COMMIT_HASH=$(git rev-parse --short HEAD)
         BUILD_DATE=$(date +'%Y.%m.%d')
-        
-        # Your preferred format: Nightly-[Date]-[Hash]
         VERSION_NAME="Nightly-${BUILD_DATE}-${COMMIT_HASH}"
         
         echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
@@ -66,23 +63,24 @@ jobs:
       run: |
         sed -i 's/\bIMAGE_LOAD_CONFIG_CODE_INTEGRITY/__IMAGE_LOAD_CONFIG_CODE_INTEGRITY/g' Source/Windows/include/winnt.h
 
-    - name: Build FEXCore (Dual Pass)
+    - name: Build FEXCore (Arihany Config)
       run: |
-        # Define the build function (Replicates Arihany's x86-fexcore.yml logic)
         build_arch() {
           local triple="$1"
           local build_dir="build-${triple}"
           
           echo "::group::Building $triple"
           
-          # We use the toolchain file because we fixed the symlinks above
-          cmake -B "$build_dir" -G Ninja \
+          # CRITICAL: Added -DENABLE_ASSERTIONS=False to stop the crash
+          cmake -B "$build_dir" -G Ninja -Wno-dev \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
             -DMINGW_TRIPLE="${triple}-w64-mingw32" \
-            -DCMAKE_INSTALL_PREFIX=./install \
+            -DCMAKE_INSTALL_PREFIX=/usr \
+            -DCMAKE_INSTALL_LIBDIR=/usr/lib/wine/aarch64-windows \
             -DENABLE_JEMALLOC_GLIBC_ALLOC=False \
             -DENABLE_LTO=False \
+            -DENABLE_ASSERTIONS=False \
             -DBUILD_TESTING=False \
             -DCMAKE_SHARED_LINKER_FLAGS="-static" \
             -DCMAKE_EXE_LINKER_FLAGS="-static"
@@ -102,7 +100,6 @@ jobs:
         rm -rf final_package
         mkdir -p final_package/system32
         
-        # Grab files from the separate build folders
         DLL_EC=$(find build-arm64ec -name "libFEXCore.dll" | head -n 1)
         DLL_WOW=$(find build-aarch64 -name "libFEXCore.dll" | head -n 1)
 
@@ -113,7 +110,7 @@ jobs:
             cp "$DLL_EC" final_package/system32/libarm64ecfex.dll
             cp "$DLL_WOW" final_package/system32/libwow64fex.dll
             
-            # Strip using the toolchain we installed
+            # Strip
             /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/libarm64ecfex.dll
             /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/libwow64fex.dll
         else
@@ -121,7 +118,6 @@ jobs:
             exit 1
         fi
 
-        # Create Profile JSON
         cat <<EOF > final_package/profile.json
         {
           "type": "FEXCore",
