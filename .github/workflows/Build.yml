@@ -8,14 +8,14 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Use the container that has the libraries
+    # Use the container that guarantees libraries exist
     container: mstorsjo/llvm-mingw:latest
 
     steps:
     - name: Install Dependencies
       run: |
         apt-get update -y
-        # Vital python packages for FEX scripts
+        # Required for FEX scripts
         apt-get install -y git python3 python3-packaging python3-setuptools
 
     - name: Checkout FEX
@@ -25,53 +25,52 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
-    - name: Build libarm64ec.dll (ARM64EC)
+    - name: Build libarm64ec.dll (As Pure ARM64)
       run: |
         mkdir build-arm64ec
         cd build-arm64ec
         
-        # KEY FIX: CMAKE_SYSTEM_PROCESSOR=AMD64
-        # Even though this is for ARM64 hardware, EC mode uses x64 data structures (CONTEXT with Rip, not Pc).
-        # This aligns the FEX source code with the Windows Headers.
+        # STRATEGY: Build as standard AArch64 (Pure ARM64).
+        # Windows on ARM (ARM64EC) can load Pure ARM64 DLLs perfectly fine.
+        # This bypasses the "Context" errors because FEX code expects ARM64 context.
         
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_SYSTEM_NAME=Windows \
-          -DCMAKE_SYSTEM_PROCESSOR=AMD64 \
+          -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+          -DCMAKE_SIZEOF_VOID_P=8 \
           -DCMAKE_C_COMPILER=clang \
           -DCMAKE_CXX_COMPILER=clang++ \
-          -DCMAKE_ASM_COMPILER=clang \
-          -DCMAKE_C_COMPILER_TARGET="arm64ec-w64-mingw32" \
-          -DCMAKE_CXX_COMPILER_TARGET="arm64ec-w64-mingw32" \
-          -DCMAKE_ASM_COMPILER_TARGET="arm64ec-w64-mingw32" \
+          -DCMAKE_C_COMPILER_TARGET="aarch64-w64-mingw32" \
+          -DCMAKE_CXX_COMPILER_TARGET="aarch64-w64-mingw32" \
           -DCMAKE_C_FLAGS="-fuse-ld=lld" \
           -DCMAKE_CXX_FLAGS="-fuse-ld=lld" \
-          -DCMAKE_ASM_FLAGS="-target arm64ec-w64-mingw32" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
           
         ninja
+        
+        # Install to get the JSON files generated
+        ninja install
 
     - name: Build libwow64fex.dll (WOW64)
       run: |
         mkdir build-wow64
         cd build-wow64
         
-        # For WOW64, we ARE pure AArch64, so we keep PROCESSOR=aarch64
+        # Standard AArch64 build for the WOW64 bridge
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_SYSTEM_NAME=Windows \
           -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+          -DCMAKE_SIZEOF_VOID_P=8 \
           -DCMAKE_C_COMPILER=clang \
           -DCMAKE_CXX_COMPILER=clang++ \
-          -DCMAKE_ASM_COMPILER=clang \
           -DCMAKE_C_COMPILER_TARGET="aarch64-w64-mingw32" \
           -DCMAKE_CXX_COMPILER_TARGET="aarch64-w64-mingw32" \
-          -DCMAKE_ASM_COMPILER_TARGET="aarch64-w64-mingw32" \
           -DCMAKE_C_FLAGS="-fuse-ld=lld" \
           -DCMAKE_CXX_FLAGS="-fuse-ld=lld" \
-          -DCMAKE_ASM_FLAGS="-target aarch64-w64-mingw32" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
@@ -84,23 +83,35 @@ jobs:
         COMMIT_HASH=$(git rev-parse --short HEAD)
         BUILD_DATE=$(date +'%Y-%m-%d')
         
+        # Create structure
         mkdir -p packaging/system32
         
-        # Robust copy command
-        find build-arm64ec -name "libarm64ecfex.dll" -exec cp {} packaging/system32/libarm64ec.dll \;
-        find build-wow64 -name "libwow64fex.dll" -exec cp {} packaging/system32/libwow64fex.dll \;
+        # 1. Copy DLLs
+        # FEX usually outputs 'libFEXCore.dll' or similar in the bin folder.
+        # We find and rename them to what Winlator expects.
         
-        # Generate the profile.json required by Winlator
+        find build-arm64ec -name "libFEXCore.dll" -exec cp {} packaging/system32/libarm64ec.dll \;
+        find build-wow64 -name "libFEXCore.dll" -exec cp {} packaging/system32/libwow64fex.dll \;
+        
+        # 2. BLACK SCREEN FIX: Copy Thunks/JSONs
+        # If these are missing, the emulator cannot configure graphics thunking.
+        # They are usually in 'share/fex-emu/' inside the install folder.
+        
+        mkdir -p packaging/share/fex-emu
+        cp -r build-arm64ec/install/share/fex-emu/* packaging/share/fex-emu/ || echo "No share files found, skipping"
+        
+        # 3. Create profile.json
         cat <<EOF > packaging/profile.json
         {
           "type": "FEXCore",
           "versionName": "Nightly-${COMMIT_HASH}",
           "versionCode": ${{ github.run_number }},
-          "description": "FEXCore Nightly (Winlator DLLs)\nCommit: ${COMMIT_HASH}\nDate: ${BUILD_DATE}",
+          "description": "FEXCore Nightly (Pure ARM64)\nCommit: ${COMMIT_HASH}\nDate: ${BUILD_DATE}",
           "author": "Blank",
           "files": [
             { "source": "system32/libarm64ec.dll", "target": "\${system32}/libarm64ec.dll" },
-            { "source": "system32/libwow64fex.dll", "target": "\${system32}/libwow64fex.dll" }
+            { "source": "system32/libwow64fex.dll", "target": "\${system32}/libwow64fex.dll" },
+            { "source": "share/fex-emu", "target": "\${data}/fex-emu" }
           ]
         }
         EOF
