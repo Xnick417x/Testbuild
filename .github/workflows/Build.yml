@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # We do NOT use the container. We install the toolchain manually below.
+    # We DO NOT use the container line. We install the toolchain manually below.
 
     steps:
     - name: Install Dependencies
@@ -18,7 +18,7 @@ jobs:
 
     - name: Setup LLVM-MinGW Toolchain (Full Release)
       run: |
-        # 1. Download the FULL release. 
+        # 1. Download the FULL release.
         # The container we used before was "Lite" and missing ARM64EC libraries. This fixes that.
         wget -q https://github.com/mstorsjo/llvm-mingw/releases/download/20240917/llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
         tar -xf llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
