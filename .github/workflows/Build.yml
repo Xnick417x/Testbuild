@@ -8,15 +8,14 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # VITAL: Use the official container. It has the correct Clang/LLD/Libraries pre-installed.
     container: mstorsjo/llvm-mingw:latest
 
     steps:
     - name: Install Dependencies
-      # The container is minimal; we need git and python for the build scripts
+      # FIX: Added python3-packaging and python3-setuptools so the build scripts don't crash.
       run: |
         apt-get update -y
-        apt-get install -y git python3
+        apt-get install -y git python3 python3-packaging python3-setuptools
 
     - name: Checkout FEX
       uses: actions/checkout@v4
@@ -25,48 +24,37 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
-    # BUILD 1: ARM64EC (The Hybrid DLL)
     - name: Build libarm64ec.dll
       run: |
         mkdir build-arm64ec
         cd build-arm64ec
         
-        # We explicitly set the Compiler Target and System Processor.
-        # -fuse-ld=lld guarantees we use the Windows linker, fixing the "emulation mode" error.
+        # We use the exact same flags as the last run (because they worked!)
+        # The python error above masked the success of the compiler check.
         
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_SYSTEM_NAME=Windows \
-          -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
           -DCMAKE_C_COMPILER=clang \
           -DCMAKE_CXX_COMPILER=clang++ \
           -DCMAKE_C_COMPILER_TARGET="arm64ec-w64-mingw32" \
           -DCMAKE_CXX_COMPILER_TARGET="arm64ec-w64-mingw32" \
-          -DCMAKE_C_FLAGS="-fuse-ld=lld" \
-          -DCMAKE_CXX_FLAGS="-fuse-ld=lld" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
           
         ninja
 
-    # BUILD 2: WOW64 (The Bridge DLL)
     - name: Build libwow64fex.dll
       run: |
         mkdir build-wow64
         cd build-wow64
         
-        # Standard AArch64 build
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_SYSTEM_NAME=Windows \
-          -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
           -DCMAKE_C_COMPILER=clang \
           -DCMAKE_CXX_COMPILER=clang++ \
           -DCMAKE_C_COMPILER_TARGET="aarch64-w64-mingw32" \
           -DCMAKE_CXX_COMPILER_TARGET="aarch64-w64-mingw32" \
-          -DCMAKE_C_FLAGS="-fuse-ld=lld" \
-          -DCMAKE_CXX_FLAGS="-fuse-ld=lld" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
@@ -75,19 +63,15 @@ jobs:
 
     - name: Prepare Package
       run: |
-        # Fix git permissions inside container
         git config --global --add safe.directory '*'
-        
         COMMIT_HASH=$(git rev-parse --short HEAD)
         BUILD_DATE=$(date +'%Y-%m-%d')
         
         mkdir -p packaging/system32
         
-        # Robust copy: finds the files wherever CMake put them
         find build-arm64ec -name "libarm64ecfex.dll" -exec cp {} packaging/system32/libarm64ec.dll \;
         find build-wow64 -name "libwow64fex.dll" -exec cp {} packaging/system32/libwow64fex.dll \;
         
-        # Create the Winlator profile.json
         cat <<EOF > packaging/profile.json
         {
           "type": "FEXCore",
