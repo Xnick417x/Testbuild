@@ -11,13 +11,10 @@ jobs:
     container: mstorsjo/llvm-mingw:latest
 
     steps:
-    - name: Prepare Environment
+    - name: Install Dependencies
       run: |
         apt-get update -y
         apt-get install -y git python3 python3-packaging python3-setuptools
-        
-        # FIX: Add the toolchain binary folder to PATH so we can call the wrappers.
-        echo "/opt/llvm-mingw/bin" >> $GITHUB_PATH
 
     - name: Checkout FEX
       uses: actions/checkout@v4
@@ -26,16 +23,16 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
-    - name: Build libarm64ec.dll (Pure ARM64)
+    - name: Build libarm64ec.dll
       run: |
         mkdir build-arm64ec
         cd build-arm64ec
         
-        # USE THE WRAPPER: aarch64-w64-mingw32-cmake
-        # This wrapper automatically sets the correct compilers, linkers, and flags 
-        # (including avoiding the _assert error).
+        # FIX: We call the wrapper using the FULL ABSOLUTE PATH.
+        # This wrapper handles all the flags, linkers, and dlltools automatically.
+        # No more "not found" and no more "linker command failed".
         
-        aarch64-w64-mingw32-cmake .. -G Ninja \
+        /opt/llvm-mingw/bin/aarch64-w64-mingw32-cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_SIZEOF_VOID_P=8 \
           -DCMAKE_INSTALL_PREFIX=./install \
@@ -44,16 +41,16 @@ jobs:
           
         ninja
         
-        # Install to generate the Thunk Configs (Critical for Black Screen Fix)
+        # Install to generate Thunk Configs
         ninja install
 
-    - name: Build libwow64fex.dll (Pure ARM64)
+    - name: Build libwow64fex.dll
       run: |
         mkdir build-wow64
         cd build-wow64
         
-        # Use the same wrapper for the WOW64 bridge
-        aarch64-w64-mingw32-cmake .. -G Ninja \
+        # Absolute path again
+        /opt/llvm-mingw/bin/aarch64-w64-mingw32-cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_SIZEOF_VOID_P=8 \
           -DCMAKE_INSTALL_PREFIX=./install \
@@ -71,12 +68,11 @@ jobs:
         mkdir -p packaging/system32
         
         # 1. Copy DLLs
-        # The wrapper might output them to build-xxx/ or build-xxx/Bin/
         find build-arm64ec -name "libFEXCore.dll" -exec cp {} packaging/system32/libarm64ec.dll \;
         find build-wow64 -name "libFEXCore.dll" -exec cp {} packaging/system32/libwow64fex.dll \;
         
         # 2. BLACK SCREEN FIX: Copy Thunks
-        # We grab the 'share' folder created by 'ninja install' in step 1
+        # If this folder is empty, the emulator boots to black screen.
         mkdir -p packaging/share/fex-emu
         cp -r build-arm64ec/install/share/fex-emu/* packaging/share/fex-emu/ || echo "Warning: Thunks not found"
         
@@ -86,7 +82,7 @@ jobs:
           "type": "FEXCore",
           "versionName": "Nightly-${COMMIT_HASH}",
           "versionCode": ${{ github.run_number }},
-          "description": "FEXCore Nightly (Pure ARM64)\nCommit: ${COMMIT_HASH}\nDate: ${BUILD_DATE}",
+          "description": "FEXCore Nightly (Winlator DLLs)\nCommit: ${COMMIT_HASH}\nDate: ${BUILD_DATE}",
           "author": "Blank",
           "files": [
             { "source": "system32/libarm64ec.dll", "target": "\${system32}/libarm64ec.dll" },
