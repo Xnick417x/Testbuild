@@ -1,4 +1,4 @@
-name: Build FEXCore Nightly (Arihany Method)
+name: Build FEXCore Nightly (Arihany Replica)
 
 on:
   workflow_dispatch:
@@ -15,24 +15,29 @@ jobs:
         sudo apt-get update -y
         sudo apt-get install -y git python3 ninja-build pkg-config python3-packaging python3-setuptools wget tar
 
-    - name: Setup Toolchain (The "Bylaws" Fix)
+    - name: Setup Toolchain (Replica of setup-llvm.sh)
       run: |
-        # 1. Download the toolchain
-        wget -q https://github.com/mstorsjo/llvm-mingw/releases/download/20240917/llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
-        tar -xf llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
-        mv llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64 toolchain
+        # 1. Use the EXACT version from Arihany's script
+        LLVM_MINGW_TAG="20251104"
+        TOOLCHAIN_DIR="/opt/llvm-mingw"
         
-        # 2. CRITICAL STEP: Create the missing symlinks
-        # This is what allows us to use FEX's toolchain file like Arihany does.
-        cd toolchain/bin
-        ln -sf clang arm64ec-w64-mingw32-clang
-        ln -sf clang++ arm64ec-w64-mingw32-clang++
-        ln -sf llvm-ar arm64ec-w64-mingw32-ar
-        ln -sf llvm-windres arm64ec-w64-mingw32-windres
-        ln -sf llvm-strip arm64ec-w64-mingw32-strip
+        # 2. Download to the specific /opt directory (Requires sudo)
+        wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW_TAG/llvm-mingw-$LLVM_MINGW_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
         
-        # 3. Add to PATH
-        echo "$(pwd)" >> $GITHUB_PATH
+        sudo rm -rf "$TOOLCHAIN_DIR"
+        sudo mkdir -p "$TOOLCHAIN_DIR"
+        sudo tar -C "$TOOLCHAIN_DIR" --strip-components=1 -xJf llvm.tar.xz
+        
+        # 3. Add to PATH so CMake can find it
+        echo "$TOOLCHAIN_DIR/bin" >> $GITHUB_PATH
+        
+        # 4. CRITICAL: Create the 'arm64ec' symlinks manually
+        # FEX's cmake toolchain looks for 'arm64ec-w64-mingw32-clang'. We ensure it exists.
+        sudo ln -sf "$TOOLCHAIN_DIR/bin/clang" "$TOOLCHAIN_DIR/bin/arm64ec-w64-mingw32-clang"
+        sudo ln -sf "$TOOLCHAIN_DIR/bin/clang++" "$TOOLCHAIN_DIR/bin/arm64ec-w64-mingw32-clang++"
+        sudo ln -sf "$TOOLCHAIN_DIR/bin/llvm-ar" "$TOOLCHAIN_DIR/bin/arm64ec-w64-mingw32-ar"
+        sudo ln -sf "$TOOLCHAIN_DIR/bin/llvm-windres" "$TOOLCHAIN_DIR/bin/arm64ec-w64-mingw32-windres"
+        sudo ln -sf "$TOOLCHAIN_DIR/bin/llvm-strip" "$TOOLCHAIN_DIR/bin/arm64ec-w64-mingw32-strip"
 
     - name: Checkout FEX
       uses: actions/checkout@v4
@@ -50,7 +55,7 @@ jobs:
         COMMIT_HASH=$(git rev-parse --short HEAD)
         BUILD_DATE=$(date +'%Y.%m.%d')
         
-        # Format: Nightly-[Date]-[Hash]
+        # Your preferred format: Nightly-[Date]-[Hash]
         VERSION_NAME="Nightly-${BUILD_DATE}-${COMMIT_HASH}"
         
         echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
@@ -61,54 +66,45 @@ jobs:
       run: |
         sed -i 's/\bIMAGE_LOAD_CONFIG_CODE_INTEGRITY/__IMAGE_LOAD_CONFIG_CODE_INTEGRITY/g' Source/Windows/include/winnt.h
 
-    # --- PASS 1: Build ARM64EC (Host) ---
-    - name: Build Pass 1 - ARM64EC
+    - name: Build FEXCore (Dual Pass)
       run: |
-        echo "::group::Building ARM64EC"
-        rm -rf build_ec
+        # Define the build function (Replicates Arihany's x86-fexcore.yml logic)
+        build_arch() {
+          local triple="$1"
+          local build_dir="build-${triple}"
+          
+          echo "::group::Building $triple"
+          
+          # We use the toolchain file because we fixed the symlinks above
+          cmake -B "$build_dir" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
+            -DMINGW_TRIPLE="${triple}-w64-mingw32" \
+            -DCMAKE_INSTALL_PREFIX=./install \
+            -DENABLE_JEMALLOC_GLIBC_ALLOC=False \
+            -DENABLE_LTO=False \
+            -DBUILD_TESTING=False \
+            -DCMAKE_SHARED_LINKER_FLAGS="-static" \
+            -DCMAKE_EXE_LINKER_FLAGS="-static"
+
+          cmake --build "$build_dir"
+          echo "::endgroup::"
+        }
+
+        # 1. Build Host (ARM64EC)
+        build_arch "arm64ec"
         
-        # We use Arihany's exact CMake arguments now that the toolchain is patched
-        cmake -B build_ec -G Ninja \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
-          -DMINGW_TRIPLE=arm64ec-w64-mingw32 \
-          -DCMAKE_INSTALL_PREFIX=./install \
-          -DENABLE_JEMALLOC_GLIBC_ALLOC=False \
-          -DENABLE_LTO=False \
-          -DBUILD_TESTING=False
-
-        cmake --build build_ec
-        echo "::endgroup::"
-
-    # --- PASS 2: Build AARCH64 (Bridge) ---
-    - name: Build Pass 2 - AARCH64
-      run: |
-        echo "::group::Building AARCH64"
-        rm -rf build_wow
-        
-        cmake -B build_wow -G Ninja \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
-          -DMINGW_TRIPLE=aarch64-w64-mingw32 \
-          -DCMAKE_INSTALL_PREFIX=./install \
-          -DENABLE_JEMALLOC_GLIBC_ALLOC=False \
-          -DENABLE_LTO=False \
-          -DBUILD_TESTING=False
-
-        cmake --build build_wow
-        echo "::endgroup::"
+        # 2. Build Bridge (AArch64)
+        build_arch "aarch64"
 
     - name: Package & Strip
       run: |
         rm -rf final_package
         mkdir -p final_package/system32
         
-        # Use the stripped tool directly from our toolchain
-        STRIP_TOOL="$(pwd)/toolchain/bin/llvm-strip"
-        
-        # 1. Grab files
-        DLL_EC=$(find build_ec -name "libFEXCore.dll" | head -n 1)
-        DLL_WOW=$(find build_wow -name "libFEXCore.dll" | head -n 1)
+        # Grab files from the separate build folders
+        DLL_EC=$(find build-arm64ec -name "libFEXCore.dll" | head -n 1)
+        DLL_WOW=$(find build-aarch64 -name "libFEXCore.dll" | head -n 1)
 
         if [ -f "$DLL_EC" ] && [ -f "$DLL_WOW" ]; then
             echo "Found EC: $DLL_EC"
@@ -117,15 +113,15 @@ jobs:
             cp "$DLL_EC" final_package/system32/libarm64ecfex.dll
             cp "$DLL_WOW" final_package/system32/libwow64fex.dll
             
-            # Strip
-            "$STRIP_TOOL" --strip-all final_package/system32/libarm64ecfex.dll
-            "$STRIP_TOOL" --strip-all final_package/system32/libwow64fex.dll
+            # Strip using the toolchain we installed
+            /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/libarm64ecfex.dll
+            /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/libwow64fex.dll
         else
             echo "::error::Build incomplete! Missing DLLs."
             exit 1
         fi
 
-        # 2. Your Custom Profile JSON
+        # Create Profile JSON
         cat <<EOF > final_package/profile.json
         {
           "type": "FEXCore",
