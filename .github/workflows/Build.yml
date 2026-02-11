@@ -24,12 +24,11 @@ jobs:
 
     - name: Setup LLVM-MinGW Toolchain
       run: |
-        # 1. Download Toolchain
         wget -q https://github.com/mstorsjo/llvm-mingw/releases/download/20240917/llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
         tar -xf llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
         mv llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64 llvm-mingw
         
-        # 2. Add to PATH so we can call the wrappers globally
+        # Add to PATH
         echo "$(pwd)/llvm-mingw/bin" >> $GITHUB_PATH
 
     - name: Build libarm64ec.dll (ARM64EC)
@@ -37,15 +36,21 @@ jobs:
         mkdir build-arm64ec
         cd build-arm64ec
         
-        # KEY FIX: Use the 'aarch64' wrapper (which correctly points to the linker/sysroot)
-        # BUT override the target to 'arm64ec'.
+        # 1. Define where the libraries actually live (in the aarch64 folder)
+        TOOLCHAIN_ROOT="$(pwd)/../llvm-mingw"
+        LIB_PATH="$TOOLCHAIN_ROOT/aarch64-w64-mingw32/lib"
         
+        # 2. Configure CMake
+        # We pass -L explicitly so the linker stops looking for 'arm64ec' folders
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_C_COMPILER=aarch64-w64-mingw32-clang \
           -DCMAKE_CXX_COMPILER=aarch64-w64-mingw32-clang++ \
-          -DCMAKE_C_FLAGS="-target arm64ec-w64-mingw32" \
-          -DCMAKE_CXX_FLAGS="-target arm64ec-w64-mingw32" \
+          -DCMAKE_C_FLAGS="-target arm64ec-w64-mingw32 -L$LIB_PATH" \
+          -DCMAKE_CXX_FLAGS="-target arm64ec-w64-mingw32 -L$LIB_PATH" \
+          -DCMAKE_EXE_LINKER_FLAGS="-L$LIB_PATH" \
+          -DCMAKE_SHARED_LINKER_FLAGS="-L$LIB_PATH" \
+          -DCMAKE_MODULE_LINKER_FLAGS="-L$LIB_PATH" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
@@ -57,7 +62,7 @@ jobs:
         mkdir build-wow64
         cd build-wow64
         
-        # Standard AArch64 build using the default wrapper behavior
+        # Standard build (no special flags needed)
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_C_COMPILER=aarch64-w64-mingw32-clang \
@@ -75,11 +80,11 @@ jobs:
         
         mkdir -p packaging/system32
         
-        # Copy and Rename (using find to be safe)
+        # Copy files
         find build-arm64ec -name "libarm64ecfex.dll" -exec cp {} packaging/system32/libarm64ec.dll \;
         find build-wow64 -name "libwow64fex.dll" -exec cp {} packaging/system32/libwow64fex.dll \;
         
-        # Generate profile.json
+        # Create profile.json
         cat <<EOF > packaging/profile.json
         {
           "type": "FEXCore",
