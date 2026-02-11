@@ -8,8 +8,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # We stick with the container because it has the libraries we need.
-    container: mstorsjo/llvm-mingw:latest
+    # FIX: Use the specific 20240917 tag. 
+    # 'latest' uses Clang 22 (Dev) which breaks libc++ linking.
+    # 20240917 uses Clang 19 (Stable) which works perfectly.
+    container: mstorsjo/llvm-mingw:20240917
 
     steps:
     - name: Install Dependencies
@@ -24,26 +26,22 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
-    - name: Build FEXCore
+    - name: Build FEXCore (Official Method)
       run: |
-        # THE FIX:
-        # 1. Use the official toolchain: Data/CMake/toolchain_mingw.cmake
-        # 2. Add -D_WIN32_WINNT=0x0A00 -DWINVER=0x0A00 to CFLAGS/CXXFLAGS
-        #    This tells the compiler we are on Windows 10, fixing 'undefined symbol: GetActiveProcessorCount'.
+        # Using the stable container, we can use the standard Wiki build commands.
+        # This builds both the ARM64EC DLL and the WOW64 bridge.
         
         cmake -B build -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
           -DMINGW_TRIPLE=aarch64-w64-mingw32 \
-          -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00 -DWINVER=0x0A00" \
-          -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00 -DWINVER=0x0A00" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
           
         cmake --build build
         
-        # Install to generate the Thunk Configs
+        # Install is required to generate the Thunk JSONs
         cmake --install build
 
     - name: Prepare Package
@@ -55,12 +53,11 @@ jobs:
         mkdir -p packaging/system32
         
         # 1. Copy DLLs
-        # We find them in the build directory
         find build -name "libFEXCore.dll" -exec cp {} packaging/system32/libarm64ec.dll \;
         find build -name "libFEXCore.dll" -exec cp {} packaging/system32/libwow64fex.dll \;
         
         # 2. BLACK SCREEN FIX: Copy Thunks
-        # Winlator needs these JSON files to know how to handle graphics drivers.
+        # This copies the JSON files from the install/share directory.
         mkdir -p packaging/share/fex-emu
         cp -r install/share/fex-emu/* packaging/share/fex-emu/ || echo "Warning: Thunks not found"
         
