@@ -40,7 +40,6 @@ jobs:
           -DBUILD_TESTING=False
           
         cmake --build build
-        cmake --install build
 
     - name: Prepare Packaging Directory
       run: |
@@ -48,21 +47,16 @@ jobs:
         COMMIT_HASH=$(git rev-parse --short HEAD)
         BUILD_DATE=$(date +'%Y-%m-%d')
         
+        # Start with a clean folder
+        rm -rf final_package
         mkdir -p final_package/system32
         
-        # 1. Copy and Rename DLLs to match your working JSON
-        # We find 'libFEXCore.dll' and rename it to 'libarm64ecfex.dll'
+        # 1. Copy and Rename DLLs to match your working working version exactly
         find build -name "libFEXCore.dll" -exec cp {} final_package/system32/libarm64ecfex.dll \;
-        # The WOW64 bridge already builds with the correct name usually, but we force it here
         find build -name "libwow64fex.dll" -exec cp {} final_package/system32/libwow64fex.dll \; || \
         find build -name "libFEXCore.dll" -exec cp {} final_package/system32/libwow64fex.dll \;
         
-        # 2. Handle Thunks (The 'share' folder)
-        # We will keep these in system32/fex-emu to see if Winlator accepts them there
-        mkdir -p final_package/system32/fex-emu
-        cp -r install/share/fex-emu/* final_package/system32/fex-emu/ || echo "Thunks not found"
-        
-        # 3. Create profile.json with your preferred description
+        # 2. Create profile.json (Matches your extracted working JSON)
         cat <<EOF > final_package/profile.json
         {
           "type": "FEXCore",
@@ -87,7 +81,7 @@ jobs:
       run: |
         COMMIT_HASH=$(git rev-parse --short HEAD)
         cd final_package
-        # We use 'tar' but ensure no extra prefix folders are added
+        # This ensures the .wcp has profile.json and system32/ at the root level
         tar -cJf ../FEXCore-Nightly-${COMMIT_HASH}.wcp .
 
     - name: Upload Artifacts
