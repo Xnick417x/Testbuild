@@ -12,9 +12,10 @@ jobs:
 
     steps:
     - name: Install Dependencies
+      # The Wiki/Max's script requires these specific tools
       run: |
         apt-get update -y
-        apt-get install -y git python3 python3-packaging python3-setuptools
+        apt-get install -y git python3 ninja-build pkg-config python3-packaging python3-setuptools
 
     - name: Checkout FEX
       uses: actions/checkout@v4
@@ -23,41 +24,23 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
-    - name: Build libarm64ec.dll
+    - name: Build FEXCore (Unified Build)
       run: |
-        mkdir build-arm64ec
-        cd build-arm64ec
+        # We build everything in one pass using the OFFICIAL toolchain file.
+        # This builds both the Core and the WOW64 bridge as pure AArch64 (which Winlator supports).
         
-        # FIX: We call the wrapper using the FULL ABSOLUTE PATH.
-        # This wrapper handles all the flags, linkers, and dlltools automatically.
-        # No more "not found" and no more "linker command failed".
-        
-        /opt/llvm-mingw/bin/aarch64-w64-mingw32-cmake .. -G Ninja \
+        cmake -B build -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_SIZEOF_VOID_P=8 \
+          -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
+          -DMINGW_TRIPLE=aarch64-w64-mingw32 \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
           
-        ninja
+        cmake --build build
         
-        # Install to generate Thunk Configs
-        ninja install
-
-    - name: Build libwow64fex.dll
-      run: |
-        mkdir build-wow64
-        cd build-wow64
-        
-        # Absolute path again
-        /opt/llvm-mingw/bin/aarch64-w64-mingw32-cmake .. -G Ninja \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_SIZEOF_VOID_P=8 \
-          -DCMAKE_INSTALL_PREFIX=./install \
-          -DENABLE_LTO=False \
-          -DBUILD_TESTING=False
-          
-        ninja
+        # Install step is REQUIRED to generate the Thunk Configs (share folder)
+        cmake --install build
 
     - name: Prepare Package
       run: |
@@ -68,13 +51,16 @@ jobs:
         mkdir -p packaging/system32
         
         # 1. Copy DLLs
-        find build-arm64ec -name "libFEXCore.dll" -exec cp {} packaging/system32/libarm64ec.dll \;
-        find build-wow64 -name "libFEXCore.dll" -exec cp {} packaging/system32/libwow64fex.dll \;
+        # FEX build output puts the DLLs in the build/Bin folder or install/bin
+        # We find them to be safe.
+        find build -name "libFEXCore.dll" -exec cp {} packaging/system32/libarm64ec.dll \;
+        find build -name "libFEXCore.dll" -exec cp {} packaging/system32/libwow64fex.dll \;
         
         # 2. BLACK SCREEN FIX: Copy Thunks
-        # If this folder is empty, the emulator boots to black screen.
+        # This is the step Max's script is missing. 
+        # Winlator needs these JSON files to know how to handle graphics drivers.
         mkdir -p packaging/share/fex-emu
-        cp -r build-arm64ec/install/share/fex-emu/* packaging/share/fex-emu/ || echo "Warning: Thunks not found"
+        cp -r install/share/fex-emu/* packaging/share/fex-emu/ || echo "Warning: Thunks not found"
         
         # 3. Create profile.json
         cat <<EOF > packaging/profile.json
@@ -82,7 +68,7 @@ jobs:
           "type": "FEXCore",
           "versionName": "Nightly-${COMMIT_HASH}",
           "versionCode": ${{ github.run_number }},
-          "description": "FEXCore Nightly (Winlator DLLs)\nCommit: ${COMMIT_HASH}\nDate: ${BUILD_DATE}",
+          "description": "FEXCore Nightly (Official Toolchain)\nCommit: ${COMMIT_HASH}\nDate: ${BUILD_DATE}",
           "author": "Blank",
           "files": [
             { "source": "system32/libarm64ec.dll", "target": "\${system32}/libarm64ec.dll" },
