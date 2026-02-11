@@ -8,13 +8,22 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: mstorsjo/llvm-mingw:20240917
+    # We do NOT use the container line anymore. We install the toolchain manually below.
 
     steps:
     - name: Install Dependencies
       run: |
-        apt-get update -y
-        apt-get install -y git python3 ninja-build pkg-config python3-packaging python3-setuptools
+        sudo apt-get update -y
+        sudo apt-get install -y git python3 ninja-build pkg-config python3-packaging python3-setuptools wget tar
+
+    - name: Install LLVM-MinGW Toolchain (With ARM64EC Support)
+      run: |
+        # Download the full toolchain release that contains the ARM64EC libraries
+        wget https://github.com/mstorsjo/llvm-mingw/releases/download/20240917/llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
+        tar -xf llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
+        
+        # Add to PATH so CMake can find arm64ec-w64-mingw32-clang
+        echo "$(pwd)/llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64/bin" >> $GITHUB_PATH
 
     - name: Checkout FEX
       uses: actions/checkout@v4
@@ -31,7 +40,7 @@ jobs:
         LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "FEX-Unknown")
         COMMIT_HASH=$(git rev-parse --short HEAD)
         
-        # Matches your requested format: Stable-Nightly-Commit
+        # Format: [Tag]-Nightly-[Commit]
         echo "VERSION_NAME=${LATEST_TAG}-Nightly-${COMMIT_HASH}" >> $GITHUB_ENV
         echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
 
@@ -45,23 +54,14 @@ jobs:
         echo "::group::Building ARM64EC"
         rm -rf build_ec
         
-        # CRITICAL FIXES: 
-        # 1. -fuse-ld=lld: Forces use of the linker that supports ARM64EC.
-        # 2. -L.../aarch64-w64-mingw32/lib: Forces it to find the missing system libraries (kernel32, etc) in the AArch64 folder.
-        
+        # We use the Toolchain File now because we have the REAL toolchain installed
         cmake -B build_ec -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_SYSTEM_NAME=Windows \
-          -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
-          -DCMAKE_C_COMPILER=clang \
-          -DCMAKE_CXX_COMPILER=clang++ \
-          -DCMAKE_RC_COMPILER=llvm-windres \
-          -DCMAKE_AR=llvm-ar \
-          -DCMAKE_RANLIB=llvm-ranlib \
-          -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00 --target=arm64ec-w64-mingw32 -fuse-ld=lld -L/opt/llvm-mingw/aarch64-w64-mingw32/lib" \
-          -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00 --target=arm64ec-w64-mingw32 -fuse-ld=lld -L/opt/llvm-mingw/aarch64-w64-mingw32/lib" \
-          -DCMAKE_EXE_LINKER_FLAGS="-static -fuse-ld=lld -L/opt/llvm-mingw/aarch64-w64-mingw32/lib" \
-          -DCMAKE_SHARED_LINKER_FLAGS="-static -fuse-ld=lld -L/opt/llvm-mingw/aarch64-w64-mingw32/lib" \
+          -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
+          -DMINGW_TRIPLE=arm64ec-w64-mingw32 \
+          -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00" \
+          -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00" \
+          -DCMAKE_SHARED_LINKER_FLAGS="-static" \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
 
@@ -74,20 +74,13 @@ jobs:
         echo "::group::Building AARCH64"
         rm -rf build_wow
         
-        # Standard AARCH64 build (No library hacks needed here)
         cmake -B build_wow -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_SYSTEM_NAME=Windows \
-          -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
-          -DCMAKE_C_COMPILER=clang \
-          -DCMAKE_CXX_COMPILER=clang++ \
-          -DCMAKE_RC_COMPILER=llvm-windres \
-          -DCMAKE_AR=llvm-ar \
-          -DCMAKE_RANLIB=llvm-ranlib \
-          -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00 --target=aarch64-w64-mingw32 -fuse-ld=lld" \
-          -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00 --target=aarch64-w64-mingw32 -fuse-ld=lld" \
-          -DCMAKE_EXE_LINKER_FLAGS="-static -fuse-ld=lld" \
-          -DCMAKE_SHARED_LINKER_FLAGS="-static -fuse-ld=lld" \
+          -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
+          -DMINGW_TRIPLE=aarch64-w64-mingw32 \
+          -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00" \
+          -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00" \
+          -DCMAKE_SHARED_LINKER_FLAGS="-static" \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
 
@@ -112,7 +105,7 @@ jobs:
             cp "$DLL_EC" final_package/system32/libarm64ecfex.dll
             cp "$DLL_WOW" final_package/system32/libwow64fex.dll
             
-            # Use llvm-strip to be safe
+            # Using the toolchain's strip
             llvm-strip --strip-all final_package/system32/libarm64ecfex.dll
             llvm-strip --strip-all final_package/system32/libwow64fex.dll
         else
