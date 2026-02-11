@@ -8,14 +8,12 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Use the container that guarantees libraries exist
     container: mstorsjo/llvm-mingw:latest
 
     steps:
     - name: Install Dependencies
       run: |
         apt-get update -y
-        # Required for FEX scripts
         apt-get install -y git python3 python3-packaging python3-setuptools
 
     - name: Checkout FEX
@@ -25,14 +23,13 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
-    - name: Build libarm64ec.dll (As Pure ARM64)
+    - name: Build libarm64ec.dll (Pure ARM64)
       run: |
         mkdir build-arm64ec
         cd build-arm64ec
         
-        # STRATEGY: Build as standard AArch64 (Pure ARM64).
-        # Windows on ARM (ARM64EC) can load Pure ARM64 DLLs perfectly fine.
-        # This bypasses the "Context" errors because FEX code expects ARM64 context.
+        # FIX: We explicitly set ASM targets and flags.
+        # This forces the assembler to accept Windows-specific flags like "dr".
         
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
@@ -41,17 +38,20 @@ jobs:
           -DCMAKE_SIZEOF_VOID_P=8 \
           -DCMAKE_C_COMPILER=clang \
           -DCMAKE_CXX_COMPILER=clang++ \
+          -DCMAKE_ASM_COMPILER=clang \
           -DCMAKE_C_COMPILER_TARGET="aarch64-w64-mingw32" \
           -DCMAKE_CXX_COMPILER_TARGET="aarch64-w64-mingw32" \
+          -DCMAKE_ASM_COMPILER_TARGET="aarch64-w64-mingw32" \
           -DCMAKE_C_FLAGS="-fuse-ld=lld" \
           -DCMAKE_CXX_FLAGS="-fuse-ld=lld" \
+          -DCMAKE_ASM_FLAGS="--target=aarch64-w64-mingw32" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
           
         ninja
         
-        # Install to get the JSON files generated
+        # Install to generate the Thunk JSONs (Fixes Black Screen)
         ninja install
 
     - name: Build libwow64fex.dll (WOW64)
@@ -59,7 +59,7 @@ jobs:
         mkdir build-wow64
         cd build-wow64
         
-        # Standard AArch64 build for the WOW64 bridge
+        # Same fix for the second DLL
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_SYSTEM_NAME=Windows \
@@ -67,10 +67,13 @@ jobs:
           -DCMAKE_SIZEOF_VOID_P=8 \
           -DCMAKE_C_COMPILER=clang \
           -DCMAKE_CXX_COMPILER=clang++ \
+          -DCMAKE_ASM_COMPILER=clang \
           -DCMAKE_C_COMPILER_TARGET="aarch64-w64-mingw32" \
           -DCMAKE_CXX_COMPILER_TARGET="aarch64-w64-mingw32" \
+          -DCMAKE_ASM_COMPILER_TARGET="aarch64-w64-mingw32" \
           -DCMAKE_C_FLAGS="-fuse-ld=lld" \
           -DCMAKE_CXX_FLAGS="-fuse-ld=lld" \
+          -DCMAKE_ASM_FLAGS="--target=aarch64-w64-mingw32" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
@@ -83,22 +86,17 @@ jobs:
         COMMIT_HASH=$(git rev-parse --short HEAD)
         BUILD_DATE=$(date +'%Y-%m-%d')
         
-        # Create structure
         mkdir -p packaging/system32
         
-        # 1. Copy DLLs
-        # FEX usually outputs 'libFEXCore.dll' or similar in the bin folder.
-        # We find and rename them to what Winlator expects.
-        
+        # 1. Copy DLLs (Renaming libFEXCore.dll to what Winlator needs)
+        # We look in the 'bin' folder where they are usually built
         find build-arm64ec -name "libFEXCore.dll" -exec cp {} packaging/system32/libarm64ec.dll \;
         find build-wow64 -name "libFEXCore.dll" -exec cp {} packaging/system32/libwow64fex.dll \;
         
-        # 2. BLACK SCREEN FIX: Copy Thunks/JSONs
-        # If these are missing, the emulator cannot configure graphics thunking.
-        # They are usually in 'share/fex-emu/' inside the install folder.
-        
+        # 2. BLACK SCREEN FIX: Copy the Thunk configurations
+        # These are generated during 'ninja install' into the share folder.
         mkdir -p packaging/share/fex-emu
-        cp -r build-arm64ec/install/share/fex-emu/* packaging/share/fex-emu/ || echo "No share files found, skipping"
+        cp -r build-arm64ec/install/share/fex-emu/* packaging/share/fex-emu/ || echo "Warning: Thunk configs not found"
         
         # 3. Create profile.json
         cat <<EOF > packaging/profile.json
