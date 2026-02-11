@@ -8,13 +8,11 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # VITAL CHANGE: We run the entire job inside this container.
-    # It already contains the compiler, linker, and ALL libraries for arm64ec.
+    # 1. We stay in the container because it has the libraries we need.
     container: mstorsjo/llvm-mingw:latest
 
     steps:
     - name: Install Git and Python
-      # The container is minimal, so we need to add git/python explicitly
       run: |
         apt-get update
         apt-get install -y git python3
@@ -26,17 +24,19 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
-    # Note: We do NOT need to download a toolchain. It is already installed in /opt/llvm-mingw
-
     - name: Build libarm64ec.dll (ARM64EC)
       run: |
         mkdir build-arm64ec
         cd build-arm64ec
         
-        # The container provides the wrapper 'arm64ec-w64-mingw32-cmake'
-        # This handles ALL flags, paths, and libraries automatically.
-        arm64ec-w64-mingw32-cmake .. -G Ninja \
+        # 2. THE FIX: We use 'aarch64-w64-mingw32-cmake' (which exists).
+        # We pass '-target arm64ec...' to force it to output EC code.
+        # Since we are in the container, it will automatically find the libraries.
+        
+        aarch64-w64-mingw32-cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_C_FLAGS="-target arm64ec-w64-mingw32" \
+          -DCMAKE_CXX_FLAGS="-target arm64ec-w64-mingw32" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
@@ -48,7 +48,7 @@ jobs:
         mkdir build-wow64
         cd build-wow64
         
-        # Use the wrapper for aarch64 (WOW64)
+        # Standard AArch64 build. No special flags needed.
         aarch64-w64-mingw32-cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_INSTALL_PREFIX=./install \
@@ -58,7 +58,6 @@ jobs:
         ninja
 
     - name: Prepare Package
-      # We need to explicitly allow git commands because we are in a container
       run: |
         git config --global --add safe.directory '*'
         COMMIT_HASH=$(git rev-parse --short HEAD)
