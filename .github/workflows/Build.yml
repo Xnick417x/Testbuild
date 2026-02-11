@@ -37,29 +37,49 @@ jobs:
       run: |
         sed -i 's/\bIMAGE_LOAD_CONFIG_CODE_INTEGRITY/__IMAGE_LOAD_CONFIG_CODE_INTEGRITY/g' Source/Windows/include/winnt.h
 
-    - name: Setup Toolchain Aliases
-      # CRITICAL FIX: Create the missing arm64ec symlinks pointing to clang
+    - name: Setup Toolchain (Create Wrappers)
+      # CRITICAL FIX: Create actual wrapper scripts for arm64ec
       run: |
-        cd /usr/bin
-        # Link clang to arm64ec-w64-mingw32-clang
-        ln -sf clang arm64ec-w64-mingw32-clang
-        ln -sf clang++ arm64ec-w64-mingw32-clang++
-        ln -sf clang arm64ec-w64-mingw32-gcc
-        ln -sf clang++ arm64ec-w64-mingw32-g++
-        # Link other tools
+        # 1. Find where the real clang is
+        CLANG_PATH=$(which clang)
+        CLANGXX_PATH=$(which clang++)
+        BIN_DIR=$(dirname "$CLANG_PATH")
+        
+        echo "Found clang at: $CLANG_PATH"
+        echo "Installing wrappers to: $BIN_DIR"
+        
+        cd "$BIN_DIR"
+        
+        # 2. Create the C Compiler Wrapper
+        cat <<EOF > arm64ec-w64-mingw32-clang
+        #!/bin/sh
+        exec "$CLANG_PATH" --target=arm64ec-w64-mingw32 "\$@"
+        EOF
+        
+        # 3. Create the C++ Compiler Wrapper
+        cat <<EOF > arm64ec-w64-mingw32-clang++
+        #!/bin/sh
+        exec "$CLANGXX_PATH" --target=arm64ec-w64-mingw32 "\$@"
+        EOF
+        
+        # 4. Create RC/Strip/Objcopy aliases (Symlinks are fine here)
         ln -sf llvm-windres arm64ec-w64-mingw32-windres
         ln -sf llvm-strip arm64ec-w64-mingw32-strip
         ln -sf llvm-objcopy arm64ec-w64-mingw32-objcopy
         ln -sf llvm-ar arm64ec-w64-mingw32-ar
         ln -sf llvm-ranlib arm64ec-w64-mingw32-ranlib
-        # Verify
-        ls -l arm64ec-w64-mingw32-clang
+        
+        # 5. Make wrappers executable
+        chmod +x arm64ec-w64-mingw32-clang
+        chmod +x arm64ec-w64-mingw32-clang++
 
     # --- PASS 1: Build ARM64EC ---
     - name: Build Pass 1 - ARM64EC
       run: |
         echo "::group::Building ARM64EC"
         rm -rf build_ec
+        
+        # Now CMake will find our wrapper scripts
         cmake -B build_ec -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
@@ -78,6 +98,8 @@ jobs:
       run: |
         echo "::group::Building AARCH64"
         rm -rf build_wow
+        
+        # Standard AARCH64 build (compilers already exist for this)
         cmake -B build_wow -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
@@ -106,11 +128,10 @@ jobs:
             echo "Found EC Build: $DLL_EC"
             echo "Found WOW Build: $DLL_WOW"
             
-            # Copy
             cp "$DLL_EC" final_package/system32/libarm64ecfex.dll
             cp "$DLL_WOW" final_package/system32/libwow64fex.dll
             
-            # Strip (Using generic llvm-strip to be safe)
+            # Use the correct strip tool for each
             llvm-strip --strip-all final_package/system32/libarm64ecfex.dll
             llvm-strip --strip-all final_package/system32/libwow64fex.dll
         else
