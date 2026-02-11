@@ -37,76 +37,51 @@ jobs:
       run: |
         sed -i 's/\bIMAGE_LOAD_CONFIG_CODE_INTEGRITY/__IMAGE_LOAD_CONFIG_CODE_INTEGRITY/g' Source/Windows/include/winnt.h
 
-    - name: Setup Toolchain (Create Wrappers)
-      # CRITICAL FIX: Create actual wrapper scripts for arm64ec
-      run: |
-        # 1. Find where the real clang is
-        CLANG_PATH=$(which clang)
-        CLANGXX_PATH=$(which clang++)
-        BIN_DIR=$(dirname "$CLANG_PATH")
-        
-        echo "Found clang at: $CLANG_PATH"
-        echo "Installing wrappers to: $BIN_DIR"
-        
-        cd "$BIN_DIR"
-        
-        # 2. Create the C Compiler Wrapper
-        cat <<EOF > arm64ec-w64-mingw32-clang
-        #!/bin/sh
-        exec "$CLANG_PATH" --target=arm64ec-w64-mingw32 "\$@"
-        EOF
-        
-        # 3. Create the C++ Compiler Wrapper
-        cat <<EOF > arm64ec-w64-mingw32-clang++
-        #!/bin/sh
-        exec "$CLANGXX_PATH" --target=arm64ec-w64-mingw32 "\$@"
-        EOF
-        
-        # 4. Create RC/Strip/Objcopy aliases (Symlinks are fine here)
-        ln -sf llvm-windres arm64ec-w64-mingw32-windres
-        ln -sf llvm-strip arm64ec-w64-mingw32-strip
-        ln -sf llvm-objcopy arm64ec-w64-mingw32-objcopy
-        ln -sf llvm-ar arm64ec-w64-mingw32-ar
-        ln -sf llvm-ranlib arm64ec-w64-mingw32-ranlib
-        
-        # 5. Make wrappers executable
-        chmod +x arm64ec-w64-mingw32-clang
-        chmod +x arm64ec-w64-mingw32-clang++
-
-    # --- PASS 1: Build ARM64EC ---
+    # --- PASS 1: Build ARM64EC (Host) ---
     - name: Build Pass 1 - ARM64EC
       run: |
         echo "::group::Building ARM64EC"
         rm -rf build_ec
         
-        # Now CMake will find our wrapper scripts
+        # KEY FIX: -fuse-ld=lld tells clang to use the linker that supports arm64ecpe
         cmake -B build_ec -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
-          -DMINGW_TRIPLE=arm64ec-w64-mingw32 \
-          -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00" \
-          -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00" \
-          -DCMAKE_SHARED_LINKER_FLAGS="-static" \
+          -DCMAKE_SYSTEM_NAME=Windows \
+          -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+          -DCMAKE_C_COMPILER=clang \
+          -DCMAKE_CXX_COMPILER=clang++ \
+          -DCMAKE_RC_COMPILER=llvm-windres \
+          -DCMAKE_AR=llvm-ar \
+          -DCMAKE_RANLIB=llvm-ranlib \
+          -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00 --target=arm64ec-w64-mingw32 -fuse-ld=lld" \
+          -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00 --target=arm64ec-w64-mingw32 -fuse-ld=lld" \
+          -DCMAKE_EXE_LINKER_FLAGS="-static -fuse-ld=lld" \
+          -DCMAKE_SHARED_LINKER_FLAGS="-static -fuse-ld=lld" \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
 
         cmake --build build_ec
         echo "::endgroup::"
 
-    # --- PASS 2: Build AARCH64 (WOW64) ---
+    # --- PASS 2: Build AARCH64 (WOW64 Bridge) ---
     - name: Build Pass 2 - AARCH64 (WOW64)
       run: |
         echo "::group::Building AARCH64"
         rm -rf build_wow
         
-        # Standard AARCH64 build (compilers already exist for this)
         cmake -B build_wow -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
-          -DMINGW_TRIPLE=aarch64-w64-mingw32 \
-          -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00" \
-          -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00" \
-          -DCMAKE_SHARED_LINKER_FLAGS="-static" \
+          -DCMAKE_SYSTEM_NAME=Windows \
+          -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+          -DCMAKE_C_COMPILER=clang \
+          -DCMAKE_CXX_COMPILER=clang++ \
+          -DCMAKE_RC_COMPILER=llvm-windres \
+          -DCMAKE_AR=llvm-ar \
+          -DCMAKE_RANLIB=llvm-ranlib \
+          -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00 --target=aarch64-w64-mingw32 -fuse-ld=lld" \
+          -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00 --target=aarch64-w64-mingw32 -fuse-ld=lld" \
+          -DCMAKE_EXE_LINKER_FLAGS="-static -fuse-ld=lld" \
+          -DCMAKE_SHARED_LINKER_FLAGS="-static -fuse-ld=lld" \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
 
@@ -118,10 +93,7 @@ jobs:
         rm -rf final_package
         mkdir -p final_package/system32
         
-        # 1. Grab DLL from Pass 1 (ARM64EC) -> Rename to libarm64ecfex.dll
         DLL_EC=$(find build_ec -name "libFEXCore.dll" | head -n 1)
-        
-        # 2. Grab DLL from Pass 2 (AARCH64) -> Rename to libwow64fex.dll
         DLL_WOW=$(find build_wow -name "libFEXCore.dll" | head -n 1)
 
         if [ -f "$DLL_EC" ] && [ -f "$DLL_WOW" ]; then
@@ -131,7 +103,6 @@ jobs:
             cp "$DLL_EC" final_package/system32/libarm64ecfex.dll
             cp "$DLL_WOW" final_package/system32/libwow64fex.dll
             
-            # Use the correct strip tool for each
             llvm-strip --strip-all final_package/system32/libarm64ecfex.dll
             llvm-strip --strip-all final_package/system32/libwow64fex.dll
         else
@@ -141,7 +112,6 @@ jobs:
             exit 1
         fi
 
-        # Generate profile.json
         cat <<EOF > final_package/profile.json
         {
           "type": "FEXCore",
