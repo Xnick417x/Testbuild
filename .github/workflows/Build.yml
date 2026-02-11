@@ -8,8 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # VITAL: Using the stable 20240917 container to fix the Clang 22 linker regression.
-    container: mstorsjo/llvm-mingw:20240917
+    container: mstorsjo/llvm-mingw:latest
 
     steps:
     - name: Install Dependencies
@@ -24,26 +23,28 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
-    - name: Patch WinNT Header
+    - name: Create Arihany Toolchain
+      # This is the exact toolchain logic Arihany uses to make it work in this container
       run: |
-        sed -i 's/\bIMAGE_LOAD_CONFIG_CODE_INTEGRITY/__IMAGE_LOAD_CONFIG_CODE_INTEGRITY/g' Source/Windows/include/winnt.h
+        cat <<EOF > arihany_toolchain.cmake
+        set(CMAKE_SYSTEM_NAME Windows)
+        set(CMAKE_SYSTEM_PROCESSOR aarch64)
+        set(CMAKE_C_COMPILER aarch64-w64-mingw32-gcc)
+        set(CMAKE_CXX_COMPILER aarch64-w64-mingw32-g++)
+        set(CMAKE_RC_COMPILER aarch64-w64-mingw32-windres)
+        set(CMAKE_CROSSCOMPILING TRUE)
+        EOF
 
-    - name: Build FEXCore (ARM64EC)
+    - name: Build FEXCore
       run: |
-        # We define the toolchain MANUALLY here to bypass the FEX script's auto-detection.
-        # This is the only way to force the absolute paths AND the arm64ec target.
-        
+        # Using Arihany's exact CMake flags to ensure successful compilation
         cmake -B build -G Ninja \
-          -DCMAKE_SYSTEM_NAME=Windows \
-          -DCMAKE_SYSTEM_PROCESSOR=arm64ec \
-          -DCMAKE_C_COMPILER=/opt/llvm-mingw/bin/arm64ec-w64-mingw32-clang \
-          -DCMAKE_CXX_COMPILER=/opt/llvm-mingw/bin/arm64ec-w64-mingw32-clang++ \
-          -DCMAKE_ASM_COMPILER=/opt/llvm-mingw/bin/arm64ec-w64-mingw32-clang \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00" \
-          -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00" \
-          -DENABLE_LTO=False \
-          -DBUILD_TESTING=False
+          -DCMAKE_TOOLCHAIN_FILE=arihany_toolchain.cmake \
+          -DENABLE_LTO=OFF \
+          -DBUILD_TESTING=OFF \
+          -DENABLE_ASSERTIONS=OFF \
+          -D_WIN32_WINNT=0x0A00
           
         cmake --build build
 
@@ -55,22 +56,18 @@ jobs:
         
         mkdir -p final_package/system32
         
-        # Copy DLLs (Matching your working JSON names exactly).
-        # We find the files to be safe regardless of where Ninja puts them.
-        find build -name "libarm64ecfex.dll" -exec cp {} final_package/system32/libarm64ecfex.dll \;
-        find build -name "libwow64fex.dll" -exec cp {} final_package/system32/libwow64fex.dll \;
+        # Copying DLLs using the names from your working JSON
+        # Arihany's build outputs to Bin/
+        cp build/Bin/libFEXCore.dll final_package/system32/libarm64ecfex.dll
+        cp build/Bin/libwow64fex.dll final_package/system32/libwow64fex.dll
         
-        # If the find failed, try the standard location
-        [ ! -f final_package/system32/libarm64ecfex.dll ] && cp build/Bin/libarm64ecfex.dll final_package/system32/libarm64ecfex.dll || true
-        [ ! -f final_package/system32/libwow64fex.dll ] && cp build/Bin/libwow64fex.dll final_package/system32/libwow64fex.dll || true
-        
-        # 2. Create profile.json (Matches your provided working version)
+        # Create profile.json matching your extracted working file
         cat <<EOF > final_package/profile.json
         {
           "type": "FEXCore",
           "versionName": "Nightly-${COMMIT_HASH}",
           "versionCode": ${{ github.run_number }},
-          "description": "FEXCore Nightly Release\nCommit: ${COMMIT_HASH}\nBuild Date: ${BUILD_DATE}\nTarget: ARM64EC",
+          "description": "FEXCore Nightly Release\nCommit: ${COMMIT_HASH}\nBuild Date: ${BUILD_DATE}\nOptimized via Arihany Method",
           "author": "FEX-Emu / Gemini",
           "files": [
             {
