@@ -46,7 +46,7 @@ jobs:
         sed -i 's/\bIMAGE_LOAD_CONFIG_CODE_INTEGRITY/__IMAGE_LOAD_CONFIG_CODE_INTEGRITY/g' Source/Windows/include/winnt.h
 
     - name: Build FEXCore (Static Link)
-      # CRITICAL FIX: Added "-static" to linker flags to bundle all dependencies.
+      # CRITICAL FIX: "-static" prevents the "Instant Shutdown" crash by bundling dependencies.
       run: |
         cmake -B build -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
@@ -110,4 +110,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: fexcore-nightly
-        path: *.wcp
+        path: '*.wcp'
