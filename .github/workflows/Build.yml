@@ -1,4 +1,4 @@
-name: Build FEXCore Nightly (No Strip + Fix Name)
+name: Build FEXCore Nightly (Arihany Final)
 
 on:
   workflow_dispatch:
@@ -10,14 +10,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Install Dependencies
+    - name: Install Dependencies (From install-deps-ubuntu.sh)
       run: |
         sudo apt-get update -y
-        sudo apt-get install -y git python3 ninja-build pkg-config python3-packaging python3-setuptools wget tar
+        sudo apt-get install -y --no-install-recommends \
+          ca-certificates curl xz-utils jq git glslang-tools \
+          build-essential python3 python3-venv python3-pip \
+          pkg-config cmake ninja-build zstd dos2unix perl tar unzip \
+          llvm crossbuild-essential-arm64
 
-    - name: Setup Toolchain (Replica of setup-llvm.sh)
+    - name: Setup Toolchain (From setup-llvm.sh)
       run: |
-        # 1. Use the EXACT version from Arihany's script (20251104)
+        # 1. Use the EXACT version from your setup-llvm.sh
         LLVM_MINGW_TAG="20251104"
         TOOLCHAIN_DIR="/opt/llvm-mingw"
         
@@ -31,7 +35,7 @@ jobs:
         # 3. Add to PATH
         echo "$TOOLCHAIN_DIR/bin" >> $GITHUB_PATH
         
-        # 4. Create the 'arm64ec' symlinks (Crucial for FEX toolchain file)
+        # 4. Create the 'arm64ec' symlinks (Crucial for FEX toolchain detection)
         sudo ln -sf "$TOOLCHAIN_DIR/bin/clang" "$TOOLCHAIN_DIR/bin/arm64ec-w64-mingw32-clang"
         sudo ln -sf "$TOOLCHAIN_DIR/bin/clang++" "$TOOLCHAIN_DIR/bin/arm64ec-w64-mingw32-clang++"
         sudo ln -sf "$TOOLCHAIN_DIR/bin/llvm-ar" "$TOOLCHAIN_DIR/bin/arm64ec-w64-mingw32-ar"
@@ -57,15 +61,13 @@ jobs:
         # Get the Commit Hash (e.g., 1387aecc)
         COMMIT_HASH=$(git rev-parse --short HEAD)
         
-        # FIX: Format matches your screenshot exactly: FEX-[Tag]-Nightly-[Commit]
+        # FIX: Format matches your request: FEX-[Tag]-Nightly-[Commit]
         VERSION_NAME="${LATEST_TAG}-Nightly-${COMMIT_HASH}"
         
         echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
         echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
 
-    - name: Patch WinNT Header
-      run: |
-        sed -i 's/\bIMAGE_LOAD_CONFIG_CODE_INTEGRITY/__IMAGE_LOAD_CONFIG_CODE_INTEGRITY/g' Source/Windows/include/winnt.h
+    # REMOVED: Patch WinNT Header (Arihany's script does NOT use this, causing the crash)
 
     - name: Build FEXCore (Arihany Config)
       run: |
@@ -75,7 +77,6 @@ jobs:
           
           echo "::group::Building $triple"
           
-          # CRITICAL: -DENABLE_ASSERTIONS=False prevents debug crashes
           cmake -B "$build_dir" -G Ninja -Wno-dev \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
@@ -99,11 +100,12 @@ jobs:
         # 2. Build Bridge (AArch64)
         build_arch "aarch64"
 
-    - name: Package (NO STRIP)
+    - name: Package & Strip
       run: |
         rm -rf final_package
         mkdir -p final_package/system32
         
+        # Grab files from the separate build folders
         DLL_EC=$(find build-arm64ec -name "libFEXCore.dll" | head -n 1)
         DLL_WOW=$(find build-aarch64 -name "libFEXCore.dll" | head -n 1)
 
@@ -114,14 +116,15 @@ jobs:
             cp "$DLL_EC" final_package/system32/libarm64ecfex.dll
             cp "$DLL_WOW" final_package/system32/libwow64fex.dll
             
-            # REMOVED STRIPPING
-            # This was likely corrupting the DLL and causing the post-boot crash.
+            # Strip using the toolchain we installed
+            /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/libarm64ecfex.dll
+            /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/libwow64fex.dll
         else
             echo "::error::Build incomplete! Missing DLLs."
             exit 1
         fi
 
-        # Generate Profile JSON (Matches your Format)
+        # Generate Profile JSON (With Fixed Version Name)
         cat <<EOF > final_package/profile.json
         {
           "type": "FEXCore",
