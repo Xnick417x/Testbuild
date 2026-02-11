@@ -8,6 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Stable container (Clang 19) to avoid the 'GetActiveProcessorCount' linker error found in newer versions.
     container: mstorsjo/llvm-mingw:20240917
 
     steps:
@@ -23,21 +24,25 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
-    - name: Patch WinNT Header
+    - name: Patch WinNT Header Typo
+      # FIX: The FEX source header has a typo. This sed command accurately targets the 
+      # missing underscores to match the internal definition.
       run: |
-        sed -i 's/\bIMAGE_LOAD_CONFIG_CODE_INTEGRITY/__IMAGE_LOAD_CONFIG_CODE_INTEGRITY/g' Source/Windows/include/winnt.h
+        sed -i 's/IMAGE_LOAD_CONFIG_CODE_INTEGRITY CodeIntegrity;/___IMAGE_LOAD_CONFIG_CODE_INTEGRITY CodeIntegrity;/g' Source/Windows/include/winnt.h
 
-    - name: Build FEXCore
+    - name: Build FEXCore (ARM64EC)
       run: |
+        # STRATEGY: Use the official FEX toolchain with the ARM64EC triple.
+        # This is the ONLY supported way to build FEX for Windows-on-ARM/Winlator.
+        
         cmake -B build -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
-          -DMINGW_TRIPLE=aarch64-w64-mingw32 \
-          -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00" \
-          -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00" \
+          -DMINGW_TRIPLE=arm64ec-w64-mingw32 \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
-          -DBUILD_TESTING=False
+          -DBUILD_TESTING=False \
+          -DENABLE_ASSERTIONS=False
           
         cmake --build build
 
@@ -47,22 +52,25 @@ jobs:
         COMMIT_HASH=$(git rev-parse --short HEAD)
         BUILD_DATE=$(date +'%Y-%m-%d')
         
-        # Start with a clean folder
+        # Create a clean folder structure as per your extracted working version
         rm -rf final_package
         mkdir -p final_package/system32
         
-        # 1. Copy and Rename DLLs to match your working working version exactly
+        # 1. Copy the ARM64EC DLL and the WOW64 bridge DLL
+        # In ARM64EC builds, FEX outputs the core as libarm64ecfex.dll
+        cp build/Bin/libarm64ecfex.dll final_package/system32/libarm64ecfex.dll || \
         find build -name "libFEXCore.dll" -exec cp {} final_package/system32/libarm64ecfex.dll \;
-        find build -name "libwow64fex.dll" -exec cp {} final_package/system32/libwow64fex.dll \; || \
-        find build -name "libFEXCore.dll" -exec cp {} final_package/system32/libwow64fex.dll \;
         
-        # 2. Create profile.json (Matches your extracted working JSON)
+        cp build/Bin/libwow64fex.dll final_package/system32/libwow64fex.dll || \
+        find build -name "libwow64fex.dll" -exec cp {} final_package/system32/libwow64fex.dll \;
+        
+        # 2. Create the profile.json (Matches your working example exactly)
         cat <<EOF > final_package/profile.json
         {
           "type": "FEXCore",
           "versionName": "Nightly-${COMMIT_HASH}",
           "versionCode": ${{ github.run_number }},
-          "description": "FEXCore Nightly Release\nCommit: ${COMMIT_HASH}\nBuild Date: ${BUILD_DATE}\nOptimized for Snapdragon 8 Elite",
+          "description": "FEXCore Nightly Release\nLatest Commits from Main\nBuild Date: ${BUILD_DATE}\nTarget: arm64ec-w64-mingw32",
           "author": "FEX-Emu / Gemini",
           "files": [
             {
@@ -81,7 +89,7 @@ jobs:
       run: |
         COMMIT_HASH=$(git rev-parse --short HEAD)
         cd final_package
-        # This ensures the .wcp has profile.json and system32/ at the root level
+        # Compression must happen inside the folder so profile.json is at the root
         tar -cJf ../FEXCore-Nightly-${COMMIT_HASH}.wcp .
 
     - name: Upload Artifacts
