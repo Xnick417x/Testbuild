@@ -1,9 +1,9 @@
-name: Build FEXCore Nightly (Direct Clang Method)
+name: Build FEXCore Nightly (Arihany Method)
 
 on:
-  schedule:
-    - cron: '0 0 * * *'
   workflow_dispatch:
+  schedule:
+    - cron: "0 17 * * *"
 
 jobs:
   build:
@@ -15,17 +15,14 @@ jobs:
         sudo apt-get update -y
         sudo apt-get install -y git python3 ninja-build pkg-config python3-packaging python3-setuptools wget tar
 
-    - name: Setup Toolchain (Full LLVM-MinGW)
+    - name: Setup Toolchain (Simulating setup-llvm.sh)
       run: |
-        # 1. Download the toolchain that contains the ARM64EC libraries
+        # 1. Download the Bylaws/LLVM-MinGW Toolchain (Specific version used by FEX)
         wget -q https://github.com/mstorsjo/llvm-mingw/releases/download/20240917/llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
         tar -xf llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
-        
-        # 2. Rename to 'toolchain' for simplicity
         mv llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64 toolchain
         
-        # 3. Add 'toolchain/bin' to the Github Actions PATH
-        # This allows CMake to simply find 'clang' and 'llvm-ar' without complex paths.
+        # 2. Add to PATH so the build script can find 'clang', 'llvm-ar', etc.
         echo "$(pwd)/toolchain/bin" >> $GITHUB_PATH
 
     - name: Checkout FEX
@@ -42,63 +39,70 @@ jobs:
         git fetch --tags
         LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "FEX-Unknown")
         COMMIT_HASH=$(git rev-parse --short HEAD)
+        BUILD_DATE=$(date +'%Y.%m.%d')
         
-        echo "VERSION_NAME=${LATEST_TAG}-Nightly-${COMMIT_HASH}" >> $GITHUB_ENV
+        # Format: Nightly-[Date]-[Hash]
+        VERSION_NAME="Nightly-${BUILD_DATE}-${COMMIT_HASH}"
+        
+        echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
         echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
+        echo "BUILD_DATE=${BUILD_DATE}" >> $GITHUB_ENV
 
     - name: Patch WinNT Header
       run: |
         sed -i 's/\bIMAGE_LOAD_CONFIG_CODE_INTEGRITY/__IMAGE_LOAD_CONFIG_CODE_INTEGRITY/g' Source/Windows/include/winnt.h
 
-    # --- PASS 1: Build ARM64EC (Host Engine) ---
+    # --- PASS 1: Build ARM64EC (Host) ---
     - name: Build Pass 1 - ARM64EC
       run: |
         echo "::group::Building ARM64EC"
         rm -rf build_ec
         
-        # CRITICAL FIX: 
-        # 1. We use "clang" (which is now in PATH).
-        # 2. We pass "--target=arm64ec..." in flags.
-        # 3. We use "-static" to prevent the shutdown crash.
+        # We use direct pathing to clang to avoid "Compiler not found" errors
+        # We assume the toolchain we downloaded is valid
+        TC_BIN="$(pwd)/toolchain/bin"
         
         cmake -B build_ec -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_SYSTEM_NAME=Windows \
           -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
-          -DCMAKE_C_COMPILER=clang \
-          -DCMAKE_CXX_COMPILER=clang++ \
-          -DCMAKE_RC_COMPILER=llvm-windres \
-          -DCMAKE_AR=llvm-ar \
-          -DCMAKE_RANLIB=llvm-ranlib \
+          -DCMAKE_C_COMPILER="$TC_BIN/clang" \
+          -DCMAKE_CXX_COMPILER="$TC_BIN/clang++" \
+          -DCMAKE_RC_COMPILER="$TC_BIN/llvm-windres" \
+          -DCMAKE_AR="$TC_BIN/llvm-ar" \
+          -DCMAKE_RANLIB="$TC_BIN/llvm-ranlib" \
           -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00 --target=arm64ec-w64-mingw32" \
           -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00 --target=arm64ec-w64-mingw32" \
           -DCMAKE_SHARED_LINKER_FLAGS="-static -fuse-ld=lld --target=arm64ec-w64-mingw32" \
           -DCMAKE_EXE_LINKER_FLAGS="-static -fuse-ld=lld --target=arm64ec-w64-mingw32" \
+          -DENABLE_JEMALLOC_GLIBC_ALLOC=False \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
 
         cmake --build build_ec
         echo "::endgroup::"
 
-    # --- PASS 2: Build AARCH64 (WOW64 Bridge) ---
-    - name: Build Pass 2 - AARCH64 (WOW64)
+    # --- PASS 2: Build AARCH64 (Bridge) ---
+    - name: Build Pass 2 - AARCH64
       run: |
         echo "::group::Building AARCH64"
         rm -rf build_wow
+        TC_BIN="$(pwd)/toolchain/bin"
         
         cmake -B build_wow -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_SYSTEM_NAME=Windows \
           -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
-          -DCMAKE_C_COMPILER=clang \
-          -DCMAKE_CXX_COMPILER=clang++ \
-          -DCMAKE_RC_COMPILER=llvm-windres \
-          -DCMAKE_AR=llvm-ar \
-          -DCMAKE_RANLIB=llvm-ranlib \
+          -DCMAKE_C_COMPILER="$TC_BIN/clang" \
+          -DCMAKE_CXX_COMPILER="$TC_BIN/clang++" \
+          -DCMAKE_RC_COMPILER="$TC_BIN/llvm-windres" \
+          -DCMAKE_AR="$TC_BIN/llvm-ar" \
+          -DCMAKE_RANLIB="$TC_BIN/llvm-ranlib" \
           -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00 --target=aarch64-w64-mingw32" \
           -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00 --target=aarch64-w64-mingw32" \
           -DCMAKE_SHARED_LINKER_FLAGS="-static -fuse-ld=lld --target=aarch64-w64-mingw32" \
           -DCMAKE_EXE_LINKER_FLAGS="-static -fuse-ld=lld --target=aarch64-w64-mingw32" \
+          -DENABLE_JEMALLOC_GLIBC_ALLOC=False \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
 
@@ -109,37 +113,33 @@ jobs:
       run: |
         rm -rf final_package
         mkdir -p final_package/system32
+        TC_BIN="$(pwd)/toolchain/bin"
         
-        # 1. Grab DLL from Pass 1 (ARM64EC) -> This IS libarm64ecfex.dll
         DLL_EC=$(find build_ec -name "libFEXCore.dll" | head -n 1)
-        
-        # 2. Grab DLL from Pass 2 (AARCH64) -> This IS libwow64fex.dll
         DLL_WOW=$(find build_wow -name "libFEXCore.dll" | head -n 1)
 
         if [ -f "$DLL_EC" ] && [ -f "$DLL_WOW" ]; then
-            echo "Found EC Build: $DLL_EC"
-            echo "Found WOW Build: $DLL_WOW"
+            echo "Found EC: $DLL_EC"
+            echo "Found WOW: $DLL_WOW"
             
             cp "$DLL_EC" final_package/system32/libarm64ecfex.dll
             cp "$DLL_WOW" final_package/system32/libwow64fex.dll
             
-            # Strip
-            llvm-strip --strip-all final_package/system32/libarm64ecfex.dll
-            llvm-strip --strip-all final_package/system32/libwow64fex.dll
+            # Strip using the correct tool
+            "$TC_BIN/llvm-strip" --strip-all final_package/system32/libarm64ecfex.dll
+            "$TC_BIN/llvm-strip" --strip-all final_package/system32/libwow64fex.dll
         else
-            echo "::error::Missing build outputs!"
-            echo "EC Build Found? $DLL_EC"
-            echo "WOW Build Found? $DLL_WOW"
+            echo "::error::Build incomplete! Missing DLLs."
             exit 1
         fi
 
-        # Generate profile.json
+        # 2. Your Custom Profile JSON
         cat <<EOF > final_package/profile.json
         {
           "type": "FEXCore",
           "versionName": "${{ env.VERSION_NAME }}",
           "versionCode": ${{ github.run_number }},
-          "description": "FEXCore Nightly Build\nCommit: ${{ env.COMMIT_HASH }}",
+          "description": "FEXCore Nightly\\nCommit: ${{ env.COMMIT_HASH }}\\nDate: ${{ env.BUILD_DATE }}\\nOptimized for Winlator/Ludashi",
           "author": "FEX-Emu / Gemini",
           "files": [
             {
