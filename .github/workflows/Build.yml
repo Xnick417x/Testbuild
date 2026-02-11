@@ -17,7 +17,7 @@ jobs:
 
     - name: Setup Toolchain (Full LLVM-MinGW)
       run: |
-        # 1. Download the toolchain
+        # 1. Download the toolchain that contains the ARM64EC libraries
         wget -q https://github.com/mstorsjo/llvm-mingw/releases/download/20240917/llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
         tar -xf llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
         
