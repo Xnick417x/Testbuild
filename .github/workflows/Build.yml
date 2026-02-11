@@ -8,15 +8,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # 1. We stay in the container because it has the libraries we need.
-    container: mstorsjo/llvm-mingw:latest
 
     steps:
-    - name: Install Git and Python
-      run: |
-        apt-get update
-        apt-get install -y git python3
-
     - name: Checkout FEX
       uses: actions/checkout@v4
       with:
@@ -24,19 +17,57 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake ninja-build python3
+
+    - name: Setup LLVM-MinGW Toolchain
+      run: |
+        # Download the specific release that supports ARM64EC (20240917)
+        wget -q https://github.com/mstorsjo/llvm-mingw/releases/download/20240917/llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
+        tar -xf llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
+        mv llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64 llvm-mingw
+        
+        # Verify it exists
+        ls -F llvm-mingw/bin/
+
+    - name: Create Toolchain File
+      # We create this file so CMake knows exactly what compiler to use.
+      # We configure it for AArch64 by default, but we will override for EC.
+      run: |
+        TOOLCHAIN=$(pwd)/llvm-mingw
+        cat <<EOF > toolchain.cmake
+        set(CMAKE_SYSTEM_NAME Windows)
+        set(CMAKE_SYSTEM_PROCESSOR aarch64)
+        set(CMAKE_C_COMPILER "$TOOLCHAIN/bin/clang")
+        set(CMAKE_CXX_COMPILER "$TOOLCHAIN/bin/clang++")
+        set(CMAKE_RC_COMPILER "$TOOLCHAIN/bin/llvm-windres")
+        set(CMAKE_SYSROOT "$TOOLCHAIN/aarch64-w64-mingw32")
+        set(CMAKE_FIND_ROOT_PATH "$TOOLCHAIN/aarch64-w64-mingw32")
+        set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+        set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+        set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+        EOF
+
     - name: Build libarm64ec.dll (ARM64EC)
       run: |
         mkdir build-arm64ec
         cd build-arm64ec
         
-        # 2. THE FIX: We use 'aarch64-w64-mingw32-cmake' (which exists).
-        # We pass '-target arm64ec...' to force it to output EC code.
-        # Since we are in the container, it will automatically find the libraries.
+        # The Secret Sauce:
+        # 1. We target 'arm64ec-w64-mingw32'
+        # 2. We explicitly tell the linker (-Xlink=-marm64x) to accept mixed AArch64/EC code.
+        #    This fixes the "machine type conflicts" error.
         
-        aarch64-w64-mingw32-cmake .. -G Ninja \
+        cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_C_FLAGS="-target arm64ec-w64-mingw32" \
-          -DCMAKE_CXX_FLAGS="-target arm64ec-w64-mingw32" \
+          -DCMAKE_TOOLCHAIN_FILE=../toolchain.cmake \
+          -DCMAKE_C_COMPILER_TARGET="arm64ec-w64-mingw32" \
+          -DCMAKE_CXX_COMPILER_TARGET="arm64ec-w64-mingw32" \
+          -DCMAKE_EXE_LINKER_FLAGS="-Xlink=-marm64x" \
+          -DCMAKE_SHARED_LINKER_FLAGS="-Xlink=-marm64x" \
+          -DCMAKE_MODULE_LINKER_FLAGS="-Xlink=-marm64x" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
@@ -48,9 +79,14 @@ jobs:
         mkdir build-wow64
         cd build-wow64
         
-        # Standard AArch64 build. No special flags needed.
-        aarch64-w64-mingw32-cmake .. -G Ninja \
+        # Standard AArch64 build. 
+        # The toolchain file already defaults to aarch64, so we just set the target to be sure.
+        
+        cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_TOOLCHAIN_FILE=../toolchain.cmake \
+          -DCMAKE_C_COMPILER_TARGET="aarch64-w64-mingw32" \
+          -DCMAKE_CXX_COMPILER_TARGET="aarch64-w64-mingw32" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
@@ -59,17 +95,19 @@ jobs:
 
     - name: Prepare Package
       run: |
-        git config --global --add safe.directory '*'
         COMMIT_HASH=$(git rev-parse --short HEAD)
         BUILD_DATE=$(date +'%Y-%m-%d')
         
         mkdir -p packaging/system32
         
-        # Copy files (using find to be safe)
+        # Find and copy files
         find build-arm64ec -name "libarm64ecfex.dll" -exec cp {} packaging/system32/libarm64ec.dll \;
         find build-wow64 -name "libwow64fex.dll" -exec cp {} packaging/system32/libwow64fex.dll \;
         
-        # Generate profile.json
+        # Debug: Show what we copied
+        ls -R packaging/
+        
+        # Create profile.json
         cat <<EOF > packaging/profile.json
         {
           "type": "FEXCore",
@@ -86,7 +124,6 @@ jobs:
 
     - name: Create WCP Package
       run: |
-        git config --global --add safe.directory '*'
         COMMIT_HASH=$(git rev-parse --short HEAD)
         tar -cJf FEXCore-Nightly-${COMMIT_HASH}.wcp -C packaging .
 
