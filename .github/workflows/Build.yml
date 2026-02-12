@@ -1,4 +1,4 @@
-name: Build FEXCore Nightly (Arihany Structure Fix)
+name: Build FEXCore Nightly
 
 on:
   workflow_dispatch:
@@ -11,7 +11,6 @@ jobs:
 
     steps:
     - name: Install Dependencies
-      #
       run: |
         sudo apt-get update -y
         sudo apt-get install -y --no-install-recommends \
@@ -21,7 +20,6 @@ jobs:
           llvm crossbuild-essential-arm64
 
     - name: Setup Toolchain
-      #
       run: |
         LLVM_MINGW_TAG="20251104"
         TOOLCHAIN_DIR="/opt/llvm-mingw"
@@ -40,7 +38,7 @@ jobs:
         repository: FEX-Emu/FEX
         submodules: recursive
         fetch-depth: 0
-        path: src  # Checkout into 'src' folder to match Arihany's structure
+        path: src
 
     - name: Generate Version Name
       id: version
@@ -54,25 +52,18 @@ jobs:
         VERSION_NAME="${LATEST_TAG}-Nightly-${COMMIT_HASH}"
         
         echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
-        echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
 
     - name: Build FEXCore
-      # Logic from x86-fexcore.yml
       run: |
-        # Define build function exactly as she does
         build_arch() {
           local triple="$1"
           local dest="$2"
           local build_dir="build-${triple}"
           
-          echo "::group::Building $triple"
-          
-          # Create and enter build dir
           rm -rf "$build_dir"
           mkdir "$build_dir"
           cd "$build_dir"
           
-          # STRICT flags. No -static. No patches.
           cmake -G Ninja -Wno-dev \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE=../Data/CMake/toolchain_mingw.cmake \
@@ -86,24 +77,13 @@ jobs:
             ..
 
           ninja
-          
-          # Install using relative path (Matches her script structure)
-          # ../../stage-ec puts it in root/stage-ec
           DESTDIR="$dest" ninja install
           
-          cd .. # Go back to src
-          echo "::endgroup::"
+          cd ..
         }
 
-        # We must be inside 'src' to run this, just like her script
         cd src
-        
-        # Build Pass 1: ARM64EC (Host)
-        # Installs to ../stage-ec (which is root/stage-ec)
         build_arch "arm64ec" "../../stage-ec"
-        
-        # Build Pass 2: AARCH64 (Bridge)
-        # Installs to ../stage-wo (which is root/stage-wo)
         build_arch "aarch64" "../../stage-wo"
 
     - name: Package
@@ -111,36 +91,25 @@ jobs:
         rm -rf final_package
         mkdir -p final_package/system32
         
-        echo "DEBUG: Listing stage folders to verify content:"
-        ls -R stage-ec || echo "stage-ec missing"
-        ls -R stage-wo || echo "stage-wo missing"
-        
-        # FIX: Find any DLL in the stage folders (Recursive search)
         DLL_EC=$(find stage-ec -type f -name '*.dll' | head -n 1)
         DLL_WOW=$(find stage-wo -type f -name '*.dll' | head -n 1)
         
         if [ -f "$DLL_EC" ] && [ -f "$DLL_WOW" ]; then
-            echo "Found EC: $DLL_EC"
-            echo "Found WOW: $DLL_WOW"
-            
             cp "$DLL_EC" final_package/system32/libarm64ecfex.dll
             cp "$DLL_WOW" final_package/system32/libwow64fex.dll
             
-            # Using llvm-strip from the toolchain
             /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/libarm64ecfex.dll
             /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/libwow64fex.dll
         else
-            echo "::error::Missing DLLs in stage folders!"
             exit 1
         fi
         
-        # Generate Profile JSON
         cat <<EOF > final_package/profile.json
         {
           "type": "FEXCore",
           "versionName": "${{ env.VERSION_NAME }}",
           "versionCode": ${{ github.run_number }},
-          "description": "FEXCore Nightly\\nCommit: ${{ env.COMMIT_HASH }}\\nOptimized for Winlator/Ludashi",
+          "description": "FEXCore Nightly\\n${{ env.VERSION_NAME }}",
           "author": "FEX-Emu / Gemini",
           "files": [
             {
