@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Arihany Logic + Dynamic JSON)
+name: Build VKD3D-Proton (Arihany Logic + Manual Staging)
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   # ==================================================================
-  # JOB 1: STANDARD BUILD (Untouched - Working)
+  # JOB 1: STANDARD BUILD (Unchanged - Working)
   # ==================================================================
   build-standard:
     runs-on: ubuntu-latest
@@ -123,7 +123,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (Arihany Logic + Dynamic JSON)
+  # JOB 2: ARM64EC BUILD (Arihany Logic + Manual Staging)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -201,7 +201,7 @@ jobs:
         cd src
         
         # === ARIHANY LOGIC START ===
-        # Disable LTO and Strip to prevent header corruption
+        # LTO=false and Strip=false prevents header corruption
         echo "::group::Building ARM64EC"
         meson setup build-ec \
           --cross-file ../cross-arm64ec.txt \
@@ -220,7 +220,7 @@ jobs:
         ninja -C build-x86
         echo "::endgroup::"
 
-    - name: Package with Dynamic JSON
+    - name: Package with Manual Staging
       run: |
         rm -rf final_package
         mkdir -p final_package/system32
