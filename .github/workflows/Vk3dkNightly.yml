@@ -8,7 +8,7 @@ on:
 jobs:
   # ==================================================================
   # JOB 1: STANDARD BUILD (x64 + x86)
-  # Status: WORKING (Confirmed)
+  # Status: WORKING
   # ==================================================================
   build-standard:
     runs-on: ubuntu-latest
@@ -43,12 +43,10 @@ jobs:
       run: |
         cd src
         COMMIT_HASH=$(git rev-parse --short HEAD)
-        # Matches your working screenshot style
         echo "VERSION_NAME=3.0b-${COMMIT_HASH}" >> $GITHUB_ENV
 
     - name: Build Standard
       run: |
-        # x64 Cross File
         cat <<EOF > cross-x64.txt
         [binaries]
         c = '/opt/llvm-mingw/bin/x86_64-w64-mingw32-clang'
@@ -66,7 +64,6 @@ jobs:
         endian = 'little'
         EOF
 
-        # x86 Cross File
         cat <<EOF > cross-x86.txt
         [binaries]
         c = '/opt/llvm-mingw/bin/i686-w64-mingw32-clang'
@@ -101,7 +98,6 @@ jobs:
         find src/build-x86 -name "d3d12.dll" -exec cp -L {} final_package/syswow64/ \;
         find src/build-x86 -name "d3d12core.dll" -exec cp -L {} final_package/syswow64/ \;
         
-        # Matches your working JSON exactly.
         cat <<EOF > final_package/profile.json
         {
           "type": "VKD3D",
@@ -129,7 +125,7 @@ jobs:
 
   # ==================================================================
   # JOB 2: ARM64EC BUILD (Native/Hybrid)
-  # Fix: DISABLE LTO (-Db_lto=false) <- The likely cause of corruption
+  # Fix: DISABLE LTO (-Db_lto=false) + DISABLE STRIP (-Dstrip=false)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -204,12 +200,11 @@ jobs:
         EOF
 
         cd src
-        # FIX: -Db_lto=false prevents hybrid binary corruption
-        # FIX: -Dstrip=false ensures headers stay intact
+        
+        # FIX: -Db_lto=false is the critical Arihany fix
         meson setup build-ec --cross-file ../cross-arm64ec.txt -Dbuildtype=release -Dstrip=false -Db_lto=false
         ninja -C build-ec
         
-        # x86 side
         meson setup build-x86 --cross-file ../cross-x86.txt -Dbuildtype=release -Dstrip=true
         ninja -C build-x86
 
@@ -224,7 +219,12 @@ jobs:
         find src/build-x86 -name "d3d12.dll" -exec cp -L {} final_package/syswow64/ \;
         find src/build-x86 -name "d3d12core.dll" -exec cp -L {} final_package/syswow64/ \;
         
-        # Exact JSON replica with updated name
+        # Verify both folders are populated
+        if [ -z "$(ls -A final_package/syswow64)" ]; then
+           echo "::error::SysWOW64 is empty! x86 build failed."
+           exit 1
+        fi
+
         cat <<EOF > final_package/profile.json
         {
           "type": "VKD3D",
@@ -240,7 +240,6 @@ jobs:
         }
         EOF
         
-        # Clean packaging
         cd final_package
         tar -cJf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp *
 
