@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Dual v3.0b - Repaired)
+name: Build VKD3D-Proton (Standard v3.0b + Arihany ARM64EC)
 
 on:
   workflow_dispatch:
@@ -118,11 +118,11 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: vkd3d-standard
-        [cite_start]path: '*.wcp' [cite: 48]
+        path: '*.wcp'
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (Arihany Blueprint Repro)
+  # JOB 2: ARM64EC BUILD (Reproduced from Arihany Blueprint)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -134,7 +134,7 @@ jobs:
           ca-certificates curl xz-utils jq git glslang-tools \
           build-essential python3 python3-venv python3-pip \
           pkg-config cmake ninja-build zstd dos2unix perl tar unzip \
-          llvm crossbuild-essential-arm64 [cite: 18]
+          llvm crossbuild-essential-arm64
 
     - name: Setup Arihany Build Env (Meson 1.2.3 + LLVM 20251216)
       run: |
@@ -154,7 +154,7 @@ jobs:
       with:
         repository: HansKristian-Work/vkd3d-proton
         submodules: recursive
-        [cite_start]path: src [cite: 20]
+        [cite_start]path: src [cite: 37]
 
     - name: Build & Stage (Arihany Guts Logic)
       run: |
@@ -189,7 +189,7 @@ jobs:
         EOF
 
         cd src
-        # Strip Fix: Disable auto-strip and LTO
+        # Strip Fix: Disable auto-strip and LTO to prevent binary corruption
         meson setup build_ec --cross-file ../arm64ec.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=false -Db_lto=false
         ninja -C build_ec install
         
@@ -201,14 +201,15 @@ jobs:
         rm -rf final_package
         mkdir -p final_package/system32 final_package/syswow64
         
+        # Copy from Arihany staging prefix
         cp -L src/stage/ec/bin/*.dll final_package/system32/
         cp -L src/stage/x86/bin/*.dll final_package/syswow64/
 
-        # Arihany Strip Fix: Manual llvm-strip --strip-unneeded
+        # Arihany Strip Fix: Manual llvm-strip after disabling auto-strip
         /opt/llvm-mingw/bin/llvm-strip --strip-unneeded final_package/system32/*.dll
 
-        # Dynamic JSON Generation
-        echo '{"type": "VKD3D","versionName": "3.0b-ARM64EC","versionCode": 0,"description": "Arihany Repro","files": []}' > final_package/profile.json
+        # Dynamic JSON Generation logic
+        echo '{"type": "VKD3D","versionName": "3.0b-ARM64EC","versionCode": 0,"description": "Arihany Logic Repro","files": []}' > final_package/profile.json
         for f in final_package/system32/*.dll final_package/syswow64/*.dll; do
             [ -e "$f" ] || continue
             REL=${f#final_package/}
@@ -224,4 +225,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: vkd3d-arm64ec
-        path: '*.wcp'
+        path: 'VKD3D-Proton-*.wcp'
