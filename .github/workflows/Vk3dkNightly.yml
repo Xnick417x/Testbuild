@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Dual v3.0b - LTO Fix)
+name: Build VKD3D-Proton (Dual v3.0b - Safe Strip)
 
 on:
   workflow_dispatch:
@@ -47,6 +47,7 @@ jobs:
 
     - name: Build Standard
       run: |
+        # x64 Cross File
         cat <<EOF > cross-x64.txt
         [binaries]
         c = '/opt/llvm-mingw/bin/x86_64-w64-mingw32-clang'
@@ -64,6 +65,7 @@ jobs:
         endian = 'little'
         EOF
 
+        # x86 Cross File
         cat <<EOF > cross-x86.txt
         [binaries]
         c = '/opt/llvm-mingw/bin/i686-w64-mingw32-clang'
@@ -125,7 +127,9 @@ jobs:
 
   # ==================================================================
   # JOB 2: ARM64EC BUILD (Native/Hybrid)
-  # Fix: DISABLE LTO (-Db_lto=false) + DISABLE STRIP (-Dstrip=false)
+  # Fix 1: Disable LTO (-Db_lto=false)
+  # Fix 2: Disable Meson Strip (-Dstrip=false)
+  # Fix 3: MANUAL Safe Strip (reduces size so Winlator accepts it)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -133,10 +137,11 @@ jobs:
     - name: Install Dependencies
       run: |
         sudo apt-get update -y
+        # Upgrade Meson via pip to ensure best ARM64EC support
         sudo apt-get install -y --no-install-recommends \
           ca-certificates curl xz-utils jq git glslang-tools \
-          build-essential python3 python3-pip pkg-config \
-          meson ninja-build zstd
+          build-essential python3 python3-pip pkg-config zstd
+        pip3 install meson
 
     - name: Setup Toolchain
       run: |
@@ -160,7 +165,6 @@ jobs:
       run: |
         cd src
         COMMIT_HASH=$(git rev-parse --short HEAD)
-        # Updated name to include "ARM"
         echo "VERSION_NAME=3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
 
     - name: Build ARM64EC
@@ -200,11 +204,12 @@ jobs:
         EOF
 
         cd src
-        
-        # FIX: -Db_lto=false is the critical Arihany fix
+        # Meson strip disabled to prevent corruption
+        # LTO disabled to prevent header mangling
         meson setup build-ec --cross-file ../cross-arm64ec.txt -Dbuildtype=release -Dstrip=false -Db_lto=false
         ninja -C build-ec
         
+        # x86 side
         meson setup build-x86 --cross-file ../cross-x86.txt -Dbuildtype=release -Dstrip=true
         ninja -C build-x86
 
@@ -214,6 +219,11 @@ jobs:
         mkdir -p final_package/system32
         mkdir -p final_package/syswow64
         
+        # FIX: Manual Safe Strip. 
+        # Reduces file size so Winlator doesn't timeout/reject it, but keeps EC headers intact.
+        /opt/llvm-mingw/bin/llvm-strip --strip-debug src/build-ec/libs/d3d12/d3d12.dll
+        /opt/llvm-mingw/bin/llvm-strip --strip-debug src/build-ec/libs/d3d12/d3d12core.dll
+
         find src/build-ec -name "d3d12.dll" -exec cp -L {} final_package/system32/ \;
         find src/build-ec -name "d3d12core.dll" -exec cp -L {} final_package/system32/ \;
         find src/build-x86 -name "d3d12.dll" -exec cp -L {} final_package/syswow64/ \;
