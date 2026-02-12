@@ -1,4 +1,4 @@
-name: Build FEXCore Nightly (Final Fix)
+name: Build FEXCore Nightly (Arihany Exact)
 
 on:
   workflow_dispatch:
@@ -21,7 +21,7 @@ jobs:
 
     - name: Setup Toolchain (Exact Arihany Version)
       run: |
-        # 1. Use the version from setup-llvm.sh
+        # 1. Use the EXACT version from your setup-llvm.sh
         LLVM_MINGW_TAG="20251104"
         TOOLCHAIN_DIR="/opt/llvm-mingw"
         
@@ -34,6 +34,14 @@ jobs:
         
         # 3. Add to PATH so CMake finds 'arm64ec-w64-mingw32-clang' automatically
         echo "$TOOLCHAIN_DIR/bin" >> $GITHUB_PATH
+        
+        # 4. CRITICAL: Create symlinks manually.
+        # This fixes the "Compiler not found" error WITHOUT needing -static.
+        sudo ln -sf "$TOOLCHAIN_DIR/bin/clang" "$TOOLCHAIN_DIR/bin/arm64ec-w64-mingw32-clang"
+        sudo ln -sf "$TOOLCHAIN_DIR/bin/clang++" "$TOOLCHAIN_DIR/bin/arm64ec-w64-mingw32-clang++"
+        sudo ln -sf "$TOOLCHAIN_DIR/bin/llvm-ar" "$TOOLCHAIN_DIR/bin/arm64ec-w64-mingw32-ar"
+        sudo ln -sf "$TOOLCHAIN_DIR/bin/llvm-windres" "$TOOLCHAIN_DIR/bin/arm64ec-w64-mingw32-windres"
+        sudo ln -sf "$TOOLCHAIN_DIR/bin/llvm-strip" "$TOOLCHAIN_DIR/bin/arm64ec-w64-mingw32-strip"
 
     - name: Checkout FEX
       uses: actions/checkout@v4
@@ -46,13 +54,19 @@ jobs:
       id: version
       run: |
         git config --global --add safe.directory '*'
-        git fetch --tags
+        git fetch --tags --force
+        
+        # Get the Main Version (e.g., FEX-2601)
+        # We use `git tag` logic to ensure we get the latest stable tag
         LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "FEX-Unknown")
+        
+        # Get the Commit Hash (e.g., 1387aecc)
         COMMIT_HASH=$(git rev-parse --short HEAD)
         
-        # Format: FEX-[Tag]-Nightly-[Commit] (As requested)
+        # FIX: Format matches your request: FEX-[Tag]-Nightly-[Commit]
         VERSION_NAME="${LATEST_TAG}-Nightly-${COMMIT_HASH}"
         
+        echo "Detected Version: $VERSION_NAME"
         echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
         echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
 
@@ -64,8 +78,8 @@ jobs:
           
           echo "::group::Building $triple"
           
-          # We do NOT manually define the compiler here. 
-          # We let CMake find the real wrapper in the PATH we set above.
+          # FIX: Removed "-static" flags. 
+          # The toolchain_mingw.cmake file handles dependencies correctly now that symlinks exist.
           cmake -B "$build_dir" -G Ninja -Wno-dev \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
@@ -75,9 +89,7 @@ jobs:
             -DENABLE_JEMALLOC_GLIBC_ALLOC=False \
             -DENABLE_LTO=False \
             -DENABLE_ASSERTIONS=False \
-            -DBUILD_TESTING=False \
-            -DCMAKE_SHARED_LINKER_FLAGS="-static" \
-            -DCMAKE_EXE_LINKER_FLAGS="-static"
+            -DBUILD_TESTING=False
 
           cmake --build "$build_dir"
           echo "::endgroup::"
