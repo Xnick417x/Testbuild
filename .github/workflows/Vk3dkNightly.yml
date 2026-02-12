@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Dual Variants)
+name: Build VKD3D-Proton (Dual Variants v3.0b)
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ on:
 jobs:
   # ==================================================================
   # JOB 1: STANDARD BUILD (x64 + x86)
-  # Use this for standard emulation compatibility.
+  # Artifact: VKD3D-Proton-v3.0b-Standard-...
   # Structure: system32 (x64) | syswow64 (x86)
   # ==================================================================
   build-standard:
@@ -43,9 +43,9 @@ jobs:
     - name: Generate Version Name
       run: |
         cd src
-        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v2.13")
         COMMIT_HASH=$(git rev-parse --short HEAD)
-        echo "VERSION_NAME=VKD3D-Proton-${LATEST_TAG}-Standard-${COMMIT_HASH}" >> $GITHUB_ENV
+        # Forced v3.0b label as requested
+        echo "VERSION_NAME=VKD3D-Proton-v3.0b-Standard-${COMMIT_HASH}" >> $GITHUB_ENV
 
     - name: Build Standard
       run: |
@@ -105,10 +105,10 @@ jobs:
         find src/build-x86 -name "d3d12.dll" -exec cp {} final_package/syswow64/ \;
         find src/build-x86 -name "d3d12core.dll" -exec cp {} final_package/syswow64/ \;
         
-        # Profile
+        # Profile (Fixed Type)
         cat <<EOF > final_package/profile.json
         {
-          "type": "D3D12",
+          "type": "VKD3D",
           "versionName": "${{ env.VERSION_NAME }}",
           "description": "VKD3D (Standard x64/x86)\\n${{ env.VERSION_NAME }}",
           "files": [
@@ -132,7 +132,7 @@ jobs:
 
   # ==================================================================
   # JOB 2: ARM64EC BUILD (Native/Hybrid)
-  # Use this for Snapdragon performance (Native Bridge).
+  # Artifact: VKD3D-Proton-v3.0b-ARM64EC-...
   # Structure: system32 (ARM64EC) | syswow64 (x86)
   # ==================================================================
   build-arm64ec:
@@ -167,9 +167,9 @@ jobs:
     - name: Generate Version Name
       run: |
         cd src
-        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v2.13")
         COMMIT_HASH=$(git rev-parse --short HEAD)
-        echo "VERSION_NAME=VKD3D-Proton-${LATEST_TAG}-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
+        # Forced v3.0b label as requested
+        echo "VERSION_NAME=VKD3D-Proton-v3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
 
     - name: Build ARM64EC
       run: |
@@ -221,7 +221,7 @@ jobs:
         mkdir -p final_package/system32
         mkdir -p final_package/syswow64
         
-        # 1. ARM64EC -> system32 (This is the trick for Native Bridge)
+        # 1. ARM64EC -> system32
         find src/build-ec -name "d3d12.dll" -exec cp {} final_package/system32/ \;
         find src/build-ec -name "d3d12core.dll" -exec cp {} final_package/system32/ \;
         
@@ -229,10 +229,10 @@ jobs:
         find src/build-x86 -name "d3d12.dll" -exec cp {} final_package/syswow64/ \;
         find src/build-x86 -name "d3d12core.dll" -exec cp {} final_package/syswow64/ \;
         
-        # Profile
+        # Profile (Fixed Type)
         cat <<EOF > final_package/profile.json
         {
-          "type": "D3D12",
+          "type": "VKD3D",
           "versionName": "${{ env.VERSION_NAME }}",
           "description": "VKD3D (Native ARM64EC)\\n${{ env.VERSION_NAME }}",
           "files": [
