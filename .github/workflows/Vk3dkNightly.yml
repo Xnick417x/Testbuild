@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Job 1 Locked + Job 2 Arihany Exact)
+name: Build VKD3D-Proton (Job 1 Locked + Job 2 Fixed)
 
 on:
   workflow_dispatch:
@@ -123,7 +123,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (REPRODUCING ARIHANY EXACTLY)
+  # JOB 2: ARM64EC BUILD (Fixing Selection Issue)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -138,7 +138,6 @@ jobs:
           llvm crossbuild-essential-arm64
 
     - name: Setup Arihany Build Env
-      # Source: setup-llvm-meson.sh
       run: |
         python3 -m venv .venv
         .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1"
@@ -151,12 +150,10 @@ jobs:
         sudo tar -C "$TOOLCHAIN" --strip-components=1 -xJf llvm.tar.xz
         echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
 
-    - name: Install SPIRV-Headers
-      # Source: setup-llvm-meson.sh (This was missing before!)
+    - name: Install SPIRV-Headers (Arihany Fix)
       run: |
         SPV_TMP="$(mktemp -d)"
         git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers.git "$SPV_TMP"
-        # Copy headers to all relevant toolchain paths
         for trip in x86_64-w64-mingw32 i686-w64-mingw32 arm64ec-w64-mingw32; do
           if [ -d "/opt/llvm-mingw/$trip/include" ]; then
             sudo mkdir -p "/opt/llvm-mingw/$trip/include/spirv"
@@ -175,12 +172,11 @@ jobs:
       run: |
         cd src
         COMMIT_HASH=$(git rev-parse --short HEAD)
-        # Dynamic naming per your request
         echo "VERSION_NAME=3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
 
     - name: Build & Stage (Arihany Logic)
       run: |
-        # Source: arm64ec.meson.ini.txt
+        # Correct Cross-File: CPU Family MUST be aarch64 for Winlator
         cat <<EOF > arm64ec.ini
         [binaries]
         c = 'arm64ec-w64-mingw32-clang'
@@ -212,26 +208,26 @@ jobs:
         EOF
 
         cd src
-        # Source: guts-arm64ec.sh - Install to prefix logic
+        # Install to PREFIX (Staging) like Arihany's guts script
         meson setup build_ec --cross-file ../arm64ec.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=false -Db_lto=false
         ninja -C build_ec install
         
         meson setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86"
         ninja -C build_x86 install
 
-    - name: Package ARM64EC (Arihany Packing)
+    - name: Package ARM64EC (Correct Targets & Description)
       run: |
         rm -rf final_package
         mkdir -p final_package/system32 final_package/syswow64
         
-        # Source: guts-arm64ec.sh - Copy from prefix
+        # Move from Staging to Package
         cp -L src/stage/ec/bin/*.dll final_package/system32/
         cp -L src/stage/x86/bin/*.dll final_package/syswow64/
 
-        # Source: packing.sh - Manual strip
+        # Manual Strip (Critical for Winlator)
         /opt/llvm-mingw/bin/llvm-strip --strip-unneeded final_package/system32/*.dll
 
-        # Source: vkd3d-proton-arm64ec.sh - Profile generation
+        # Dynamic JSON Generation (Fixed Description & Targets)
         echo "{}" > final_package/profile.json
         jq -n \
           --arg vn "${{ env.VERSION_NAME }}" \
@@ -239,24 +235,29 @@ jobs:
             type: "VKD3D",
             versionName: $vn,
             versionCode: 0,
-            description: "Built on the Winlator WCP Hub (Upstream: Hans-Kristian Arntzen)",
+            description: ("vkd3d-proton Nightly " + $vn),
             files: []
           }' > final_package/profile.json
 
-        # Populate JSON loop
+        # Populate JSON loop with CORRECT Targets (\${system32})
         for f in final_package/system32/*.dll final_package/syswow64/*.dll; do
             [ -e "$f" ] || continue
             REL_PATH=${f#final_package/}
             FOLDER=$(dirname "$REL_PATH")
-            # Logic from vkd3d-proton-arm64ec.sh for mount targets
-            if [[ "$FOLDER" == "system32" ]]; then TARGET="\${system32}"; else TARGET="\${syswow64}"; fi
+            
+            if [[ "$FOLDER" == "system32" ]]; then 
+                TARGET="\${system32}"
+            else 
+                TARGET="\${syswow64}"
+            fi
             
             jq --arg src "$REL_PATH" --arg tgt "$TARGET/$(basename "$f")" \
                '.files += [{"source": $src, "target": $tgt}]' \
                final_package/profile.json > final_package/tmp.json && mv final_package/tmp.json final_package/profile.json
         done
 
-        # Source: packing.sh - Strict Tar Arguments
+        # Arihany Tar Logic (Clean Owners)
+        chmod -R 777 final_package
         cd final_package
         tar --format=gnu --owner=0 --group=0 --numeric-owner -cJf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp *
 
