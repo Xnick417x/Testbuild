@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Job 1 Locked + Job 2 FEX/Arihany Logic)
+name: Build VKD3D-Proton (Job 1 Locked + Job 2 Arihany Exact)
 
 on:
   workflow_dispatch:
@@ -8,7 +8,6 @@ on:
 jobs:
   # ==================================================================
   # JOB 1: STANDARD BUILD (LOCKED - Source: Vk3dkNightlyNoArm.yml.txt)
-  # Status: WORKING. DO NOT TOUCH.
   # ==================================================================
   build-standard:
     runs-on: ubuntu-latest
@@ -124,9 +123,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (THE FIX)
-  # Uses Arihany's 'arm64ec.meson.ini.txt' logic (cpu=aarch64)
-  # Uses FEX 'packing.sh' logic (numeric-owner)
+  # JOB 2: ARM64EC BUILD (Arihany Toolchain + ZSTD + Exact Strip)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -141,12 +138,12 @@ jobs:
           llvm crossbuild-essential-arm64
 
     - name: Setup Arihany Build Env
-      # Matches 'setup-llvm-meson.sh' exactly
       run: |
         python3 -m venv .venv
         .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1"
         echo "$PWD/.venv/bin" >> $GITHUB_PATH
         
+        # Toolchain 20251216 (Arihany's exact version)
         LLVM_TAG="20251216"
         TOOLCHAIN="/opt/llvm-mingw"
         wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_TAG/llvm-mingw-$LLVM_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
@@ -154,8 +151,7 @@ jobs:
         sudo tar -C "$TOOLCHAIN" --strip-components=1 -xJf llvm.tar.xz
         echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
 
-    - name: Install SPIRV-Headers
-      # Missing piece from 'setup-llvm-meson.sh'
+    - name: Install SPIRV-Headers (Arihany Fix)
       run: |
         SPV_TMP="$(mktemp -d)"
         git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers.git "$SPV_TMP"
@@ -177,17 +173,16 @@ jobs:
       run: |
         cd src
         COMMIT_HASH=$(git rev-parse --short HEAD)
-        # Restore dynamic naming logic
         echo "VERSION_NAME=3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
 
-    - name: Build & Stage (Arihany Logic + AArch64 Fix)
+    - name: Build & Stage (Arihany Logic)
       run: |
-        # THE FIX: cpu_family must be 'aarch64' even for arm64ec toolchain
-        # Matches 'arm64ec.meson.ini.txt'
+        # Exact settings from arm64ec.meson.ini.txt
+        # 'gcc' alias and 'aarch64' cpu_family are critical
         cat <<EOF > arm64ec.ini
         [binaries]
-        c = 'arm64ec-w64-mingw32-clang'
-        cpp = 'arm64ec-w64-mingw32-clang++'
+        c = 'arm64ec-w64-mingw32-gcc'
+        cpp = 'arm64ec-w64-mingw32-g++'
         ar = 'llvm-ar'
         strip = 'llvm-strip'
         windres = 'arm64ec-w64-mingw32-windres'
@@ -201,8 +196,8 @@ jobs:
 
         cat <<EOF > x86.ini
         [binaries]
-        c = 'i686-w64-mingw32-clang'
-        cpp = 'i686-w64-mingw32-clang++'
+        c = 'i686-w64-mingw32-gcc'
+        cpp = 'i686-w64-mingw32-g++'
         ar = 'llvm-ar'
         strip = 'llvm-strip'
         windres = 'i686-w64-mingw32-windres'
@@ -215,29 +210,27 @@ jobs:
         EOF
 
         cd src
-        # Install to PREFIX (Staging) - Matches 'guts-arm64ec.sh'
-        # Disable auto-strip so we can do it manually later
+        # Disable build-time strip, we do it manually later
         meson setup build_ec --cross-file ../arm64ec.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=false -Db_lto=false
         ninja -C build_ec install
         
         meson setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86"
         ninja -C build_x86 install
 
-    - name: Package ARM64EC (FEX/Arihany Packing Logic)
+    - name: Package ARM64EC (Arihany Packing Logic)
       run: |
         rm -rf final_package
         mkdir -p final_package/system32 final_package/syswow64
         
-        # Move from Staging to Package
+        # Copy from staging
         cp -L src/stage/ec/bin/*.dll final_package/system32/
         cp -L src/stage/x86/bin/*.dll final_package/syswow64/
 
-        # Manual Strip (Matches 'packing.sh')
+        # Manual Strip: Exact method from packing.sh (Line 79)
         /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/*.dll
         /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/syswow64/*.dll
 
         # Dynamic JSON Generation
-        # Matches logic from 'vkd3d-proton-arm64ec.sh' but dynamic
         echo "{}" > final_package/profile.json
         jq -n \
           --arg vn "${{ env.VERSION_NAME }}" \
@@ -249,29 +242,23 @@ jobs:
             files: []
           }' > final_package/profile.json
 
-        # Populate JSON loop
         for f in final_package/system32/*.dll final_package/syswow64/*.dll; do
             [ -e "$f" ] || continue
             REL_PATH=${f#final_package/}
             FOLDER=$(dirname "$REL_PATH")
             
-            # Explicit targets as seen in vkd3d-proton-arm64ec.sh
-            if [[ "$FOLDER" == "system32" ]]; then 
-                TARGET="\${system32}"
-            else 
-                TARGET="\${syswow64}"
-            fi
+            if [[ "$FOLDER" == "system32" ]]; then TARGET="\${system32}"; else TARGET="\${syswow64}"; fi
             
             jq --arg src "$REL_PATH" --arg tgt "$TARGET/$(basename "$f")" \
                '.files += [{"source": $src, "target": $tgt}]' \
                final_package/profile.json > final_package/tmp.json && mv final_package/tmp.json final_package/profile.json
         done
 
-        # THE PACKING FIX: Use strict tar arguments from 'packing.sh'
-        # --numeric-owner is CRITICAL for Android/Winlator permission mapping
+        # PACKING FIX: Use ZSTD (--zstd) like Arihany's packing.sh
+        # Also includes numeric-owner to prevent permission issues
         chmod -R 777 final_package
         cd final_package
-        tar --format=gnu --owner=0 --group=0 --numeric-owner -cJf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp *
+        tar --zstd --format=gnu --owner=0 --group=0 --numeric-owner -cf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp *
 
     - name: Upload ARM64EC Artifact
       uses: actions/upload-artifact@v4
