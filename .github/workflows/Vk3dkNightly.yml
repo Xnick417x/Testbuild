@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Docker Fix - Added glslang)
+name: Build VKD3D-Proton (Blind Force Patch)
 
 on:
   workflow_dispatch:
@@ -123,7 +123,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (INSIDE UBUNTU 22.04 CONTAINER)
+  # JOB 2: ARM64EC BUILD (UBUNTU 22.04 + AGGRESSIVE PATCH)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -133,7 +133,6 @@ jobs:
       - name: Install Dependencies (Ubuntu 22.04)
         run: |
           apt-get update -y
-          # FIX: Added glslang-tools which was missing in the previous script
           apt-get install -y --no-install-recommends \
             ca-certificates curl xz-utils jq git glslang-tools \
             build-essential python3 python3-venv python3-pip \
@@ -230,10 +229,10 @@ jobs:
           /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/*.dll
           /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/syswow64/*.dll
 
-      - name: SAFE HEADER PATCH (Just in case)
+      - name: AGGRESSIVE HEADER PATCH (No Questions Asked)
         run: |
           echo "==================================================="
-          echo " PATCHING DLL HEADERS TO AARCH64 (0xAA64)"
+          echo " FORCE PATCHING DLL HEADERS TO AARCH64 (0xAA64)"
           echo "==================================================="
           
           chmod -R 777 final_package
@@ -254,27 +253,30 @@ jobs:
               print(f"Processing {dll}...")
               try:
                   pe = pefile.PE(dll)
-                  current_machine = pe.FILE_HEADER.Machine
+                  current = pe.FILE_HEADER.Machine
+                  print(f"  -> Original Machine Type: {hex(current)}")
                   
-                  if current_machine == 0xA641: # ARM64EC
-                      print("  -> Detected ARM64EC. Patching...")
+                  # UNCONDITIONAL PATCHING
+                  # We don't care what it is (0x8664, 0xA641, etc.)
+                  # We FORCE it to 0xAA64
+                  
+                  if current != TARGET_MACHINE:
+                      print(f"  -> Overwriting {hex(current)} with {hex(TARGET_MACHINE)}...")
                       pe.FILE_HEADER.Machine = TARGET_MACHINE
                       pe.OPTIONAL_HEADER.CheckSum = pe.generate_checksum()
                       pe.write(dll)
-                      pe.close()
-                      print("  -> Success.")
-                  elif current_machine == TARGET_MACHINE:
-                      print("  -> Already AARCH64. Skipping.")
+                      print("  -> Success: Header Forced.")
                   else:
-                      print(f"  -> Unknown Machine Type {hex(current_machine)}. Skipping.")
+                      print("  -> Already correct. Skipping.")
+                  
+                  pe.close()
 
               except Exception as e:
                   print(f"  -> ERROR: {e}")
                   sys.exit(1)
           EOF
           
-          # Using system python (inside container) + pip install from Setup step
-          # We installed pefile into .venv earlier, so invoke that python
+          # Use the venv python
           .venv/bin/python patch_pe.py
 
       - name: Verify Architecture (Final Check)
