@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Unlock & Patch Final)
+name: Build VKD3D-Proton (Bylaws FEX Method)
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   # ==================================================================
-  # JOB 1: STANDARD BUILD (LOCKED - Working)
+  # JOB 1: STANDARD BUILD (LOCKED)
   # ==================================================================
   build-standard:
     runs-on: ubuntu-latest
@@ -123,9 +123,9 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (WITH POST-STRIP PATCHING)
+  # JOB 2: BYLAWS/FEX METHOD (Native AArch64 + EC Flags)
   # ==================================================================
-  build-arm64ec:
+  build-bylaws-fex:
     runs-on: ubuntu-latest
     steps:
       - name: Install Dependencies
@@ -135,9 +135,22 @@ jobs:
           
           sudo apt-get install -y --no-install-recommends \
             ca-certificates curl xz-utils jq git glslang-tools \
-            build-essential python3 python3-venv python3-pip \
-            pkg-config cmake ninja-build zstd dos2unix perl tar unzip \
-            llvm crossbuild-essential-arm64
+            build-essential python3 python3-pip pkg-config \
+            zstd cmake ninja-build
+
+      - name: Setup Toolchain (Bylaws Stable 20251104)
+        run: |
+          # USING OLDER TOOLCHAIN AS PER SETUP-LLVM.SH COMMENTS
+          LLVM_MINGW_TAG="20251104"
+          TOOLCHAIN_DIR="/opt/llvm-mingw"
+          wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW_TAG/llvm-mingw-$LLVM_MINGW_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
+          sudo rm -rf "$TOOLCHAIN_DIR"
+          sudo mkdir -p "$TOOLCHAIN_DIR"
+          sudo tar -C "$TOOLCHAIN_DIR" --strip-components=1 -xJf llvm.tar.xz
+          echo "$TOOLCHAIN_DIR/bin" >> $GITHUB_PATH
+
+      - name: Install Meson (Pinned 1.2.3)
+        run: pip3 install "meson==1.2.3"
 
       - name: Checkout VKD3D
         uses: actions/checkout@v4
@@ -146,24 +159,12 @@ jobs:
           submodules: recursive
           path: src
 
-      - name: Setup Arihany Build Env
-        run: |
-          python3 -m venv .venv
-          .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1"
-          echo "$PWD/.venv/bin" >> $GITHUB_PATH
-          
-          LLVM_TAG="20251216"
-          TOOLCHAIN="/opt/llvm-mingw"
-          wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_TAG/llvm-mingw-$LLVM_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
-          sudo rm -rf "$TOOLCHAIN" && sudo mkdir -p "$TOOLCHAIN"
-          sudo tar -C "$TOOLCHAIN" --strip-components=1 -xJf llvm.tar.xz
-          echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
-
       - name: Install SPIRV-Headers
         run: |
           SPV_TMP="$(mktemp -d)"
           git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers.git "$SPV_TMP"
-          for trip in x86_64-w64-mingw32 i686-w64-mingw32; do
+          # Install to AARCH64 because we are using the AARCH64 compiler
+          for trip in aarch64-w64-mingw32 i686-w64-mingw32; do
             if [ -d "/opt/llvm-mingw/$trip/include" ]; then
               sudo mkdir -p "/opt/llvm-mingw/$trip/include/spirv"
               sudo cp -r "$SPV_TMP/include/spirv/"* "/opt/llvm-mingw/$trip/include/spirv/"
@@ -176,19 +177,24 @@ jobs:
           COMMIT_HASH=$(git rev-parse --short HEAD)
           echo "VERSION_NAME=3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
 
-      - name: Build & Stage (Arihany Logic)
+      - name: Build & Stage (Bylaws Method)
         run: |
-          MESON_BIN="$GITHUB_WORKSPACE/.venv/bin/meson"
-          
-          # Cross-file: Use 'aarch64' spoof, even if compiler ignores it
-          cat <<EOF > arm64ec.ini
+          # CROSS FILE: Using NATIVE AARCH64 COMPILER
+          # This guarantees the header is 0xAA64 (AARCH64)
+          cat <<EOF > bylaws.ini
           [binaries]
-          c = 'arm64ec-w64-mingw32-gcc'
-          cpp = 'arm64ec-w64-mingw32-g++'
-          ar = 'arm64ec-w64-mingw32-ar'
+          c = 'aarch64-w64-mingw32-gcc'
+          cpp = 'aarch64-w64-mingw32-g++'
+          ar = 'aarch64-w64-mingw32-ar'
           strip = 'llvm-strip'
-          windres = 'arm64ec-w64-mingw32-windres'
-          widl = 'arm64ec-w64-mingw32-widl'
+          windres = 'aarch64-w64-mingw32-windres'
+          widl = 'aarch64-w64-mingw32-widl'
+          
+          [properties]
+          # THE MAGIC: Force EC code generation inside AArch64 binary
+          c_args = ['-marm64ec']
+          cpp_args = ['-marm64ec']
+          
           [host_machine]
           system = 'windows'
           cpu_family = 'aarch64'
@@ -212,13 +218,31 @@ jobs:
           EOF
 
           cd src
-          $MESON_BIN setup build_ec --cross-file ../arm64ec.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=false
+          # LTO Disabled to prevent linker from optimizing away the EC structure
+          meson setup build_ec --cross-file ../bylaws.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=true -Db_lto=false
           ninja -C build_ec install
           
-          $MESON_BIN setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86"
+          meson setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86" -Dstrip=true
           ninja -C build_x86 install
 
-      - name: Stage & Strip (Before Patching)
+      - name: VERIFY ARCHITECTURE
+        run: |
+          echo "=========================================="
+          echo "VERIFYING DLL ARCHITECTURE..."
+          
+          MACHINE_TYPE=$(/opt/llvm-mingw/bin/llvm-readobj -h src/stage/ec/bin/d3d12.dll | grep "Machine:")
+          echo "FOUND: $MACHINE_TYPE"
+          
+          # Since we used the AARCH64 compiler, this MUST be AARCH64.
+          if echo "$MACHINE_TYPE" | grep -q "AARCH64"; then
+             echo "SUCCESS: Binary matches AARCH64 (0xAA64)."
+          else
+             echo "::error::FAILURE: Unexpected Architecture: $MACHINE_TYPE"
+             exit 1
+          fi
+          echo "=========================================="
+
+      - name: Package Final
         run: |
           rm -rf final_package
           mkdir -p final_package/system32 final_package/syswow64
@@ -226,76 +250,6 @@ jobs:
           cp -L src/stage/ec/bin/*.dll final_package/system32/
           cp -L src/stage/x86/bin/*.dll final_package/syswow64/
 
-          # STRIP FIRST so it doesn't revert our patch later
-          echo "Stripping binaries..."
-          /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/*.dll
-          /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/syswow64/*.dll
-
-      - name: NUCLEAR HEADER PATCH (After Strip)
-        run: |
-          echo "==================================================="
-          echo " PATCHING DLL HEADERS TO AARCH64 (0xAA64)"
-          echo "==================================================="
-          
-          # 1. Force Permissions
-          chmod -R 777 final_package
-          
-          # 2. Python Patcher
-          cat <<EOF > patch_headers.py
-          import sys, glob
-          
-          files = glob.glob("final_package/system32/*.dll")
-          if not files:
-              print("ERROR: No DLLs found to patch!")
-              sys.exit(1)
-              
-          for path in files:
-              print(f"Processing: {path}")
-              try:
-                  with open(path, "r+b") as f:
-                      f.seek(0x3C)
-                      pe_offset = int.from_bytes(f.read(4), 'little')
-                      machine_offset = pe_offset + 4
-                      f.seek(machine_offset)
-                      current = f.read(2)
-                      print(f"  -> Found Header: {current.hex()}")
-                      
-                      # Patch if ARM64EC (A641)
-                      if current == b'\x41\xa6':
-                          print("  -> DETECTED ARM64EC. PATCHING to AARCH64...")
-                          f.seek(machine_offset)
-                          f.write(b'\x64\xaa') # 0xAA64
-                          
-                          # Verify Immediately
-                          f.seek(machine_offset)
-                          check = f.read(2)
-                          print(f"  -> VERIFY: Now reads {check.hex()}")
-                          if check != b'\x64\xaa':
-                              print("  -> ERROR: Write failed to persist!")
-                              sys.exit(1)
-                      elif current == b'\x64\xaa':
-                          print("  -> ALREADY AARCH64. No patch needed.")
-                      else:
-                          print(f"  -> UNKNOWN ARCH: {current.hex()}. Skipping.")
-              except Exception as e:
-                  print(f"Error: {e}")
-                  sys.exit(1)
-          EOF
-          
-          python3 patch_headers.py
-
-      - name: Final Verification
-        run: |
-          echo "Checking one last time via llvm-readobj..."
-          MACHINE=$(/opt/llvm-mingw/bin/llvm-readobj -h final_package/system32/d3d12.dll | grep "Machine:")
-          echo "$MACHINE"
-          if echo "$MACHINE" | grep -q "ARM64EC"; then
-             echo "::error::Build Failed: Header is still ARM64EC"
-             exit 1
-          fi
-
-      - name: Package Final
-        run: |
           # Dynamic JSON
           echo "{}" > final_package/profile.json
           jq -n \
@@ -318,12 +272,12 @@ jobs:
                  final_package/profile.json > final_package/tmp.json && mv final_package/tmp.json final_package/profile.json
           done
 
-          # Packing
+          chmod -R 777 final_package
           cd final_package
           tar --zstd --format=gnu --owner=0 --group=0 --numeric-owner -cf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp *
 
-      - name: Upload ARM64EC Artifact
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: vkd3d-arm64ec
+          name: vkd3d-bylaws-fex
           path: '*.wcp'
