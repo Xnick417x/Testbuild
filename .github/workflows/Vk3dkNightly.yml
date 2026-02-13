@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Docker Ubuntu 22.04)
+name: Build VKD3D-Proton (Docker Fix - Added glslang)
 
 on:
   workflow_dispatch:
@@ -128,13 +128,14 @@ jobs:
   build-arm64ec:
     runs-on: ubuntu-latest
     container:
-      image: ubuntu:22.04  # Matches the era of Arihany's environment
+      image: ubuntu:22.04
     steps:
       - name: Install Dependencies (Ubuntu 22.04)
         run: |
           apt-get update -y
+          # FIX: Added glslang-tools which was missing in the previous script
           apt-get install -y --no-install-recommends \
-            ca-certificates curl xz-utils jq git \
+            ca-certificates curl xz-utils jq git glslang-tools \
             build-essential python3 python3-venv python3-pip \
             pkg-config cmake ninja-build zstd dos2unix \
             tar unzip wget
@@ -148,18 +149,15 @@ jobs:
 
       - name: Setup Arihany Build Env
         run: |
-          # Create python venv
           python3 -m venv .venv
           .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1" pefile
           
-          # Install Toolchain
           LLVM_TAG="20251104"
           TOOLCHAIN="/opt/llvm-mingw"
           mkdir -p "$TOOLCHAIN"
           wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_TAG/llvm-mingw-$LLVM_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
           tar -C "$TOOLCHAIN" --strip-components=1 -xJf llvm.tar.xz
           
-          # Add to PATH
           echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
 
@@ -183,7 +181,6 @@ jobs:
 
       - name: Build & Stage (Arihany Logic)
         run: |
-          # Cross-file: Standard Arihany config
           cat <<EOF > arm64ec.ini
           [binaries]
           c = 'arm64ec-w64-mingw32-gcc'
