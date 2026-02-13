@@ -18,8 +18,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             ca-certificates curl xz-utils jq git glslang-tools \
             build-essential python3 python3-pip pkg-config \
-            zstd
-          # NOTE: 'meson' and 'ninja-build' REMOVED to avoid conflict
+            meson ninja-build zstd
 
       - name: Setup Toolchain
         run: |
@@ -30,10 +29,6 @@ jobs:
           sudo mkdir -p "$TOOLCHAIN_DIR"
           sudo tar -C "$TOOLCHAIN_DIR" --strip-components=1 -xJf llvm.tar.xz
           echo "$TOOLCHAIN_DIR/bin" >> $GITHUB_PATH
-
-      # Job 1 needs Meson too, but we install it via PIP to be safe/consistent
-      - name: Install Build Tools (Standard)
-        run: pip3 install meson ninja
 
       - name: Checkout VKD3D
         uses: actions/checkout@v4
@@ -128,7 +123,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (ARIHANY EXACT - VERSION STRICT)
+  # JOB 2: ARM64EC BUILD (ARIHANY EXACT - VERSION ENFORCED)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -136,11 +131,11 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update -y
-          # STRICT FIX: 'meson' and 'ninja-build' REMOVED to avoid system override
+          # FIX: 'meson' REMOVED. Only 'ninja-build' is kept (matches install-deps-ubuntu.sh).
           sudo apt-get install -y --no-install-recommends \
             ca-certificates curl xz-utils jq git glslang-tools \
             build-essential python3 python3-venv python3-pip \
-            pkg-config cmake zstd dos2unix perl tar unzip \
+            pkg-config cmake ninja-build zstd dos2unix perl tar unzip \
             llvm crossbuild-essential-arm64
 
       - name: Setup Arihany Build Env
@@ -162,7 +157,7 @@ jobs:
           SPV_TMP="$(mktemp -d)"
           git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers.git "$SPV_TMP"
           
-          # Only x86/i686 - matching Arihany logic
+          # Only installing to x86_64 and i686 paths, matching setup-llvm-meson.sh
           for trip in x86_64-w64-mingw32 i686-w64-mingw32; do
             if [ -d "/opt/llvm-mingw/$trip/include" ]; then
               sudo mkdir -p "/opt/llvm-mingw/$trip/include/spirv"
@@ -189,7 +184,8 @@ jobs:
           which meson
           meson --version
           
-          # Cross-file
+          # Cross-file from arm64ec.meson.ini.txt
+          # Using 'gcc' wrapper and spoofing 'aarch64' machine
           cat <<EOF > arm64ec.ini
           [binaries]
           c = 'arm64ec-w64-mingw32-gcc'
@@ -233,8 +229,6 @@ jobs:
         run: |
           echo "=========================================="
           echo "VERIFYING DLL ARCHITECTURE FOR WINLATOR..."
-          echo "If 'Machine' is NOT 'ARM64' or 'AARCH64', this build WILL fail."
-          echo "=========================================="
           if [ -f src/stage/ec/bin/d3d12.dll ]; then
             /opt/llvm-mingw/bin/llvm-readobj -h src/stage/ec/bin/d3d12.dll | grep -E "Machine:|ImageOptionalHeader"
           else
@@ -250,7 +244,7 @@ jobs:
           cp -L src/stage/ec/bin/*.dll final_package/system32/
           cp -L src/stage/x86/bin/*.dll final_package/syswow64/
 
-          # Manual Strip
+          # Manual Strip from packing.sh
           /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/*.dll
           /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/syswow64/*.dll
 
@@ -276,7 +270,7 @@ jobs:
                  final_package/profile.json > final_package/tmp.json && mv final_package/tmp.json final_package/profile.json
           done
 
-          # Packing with ZSTD + Numeric Owner
+          # Packing with ZSTD + Numeric Owner from packing.sh
           chmod -R 777 final_package
           cd final_package
           tar --zstd --format=gnu --owner=0 --group=0 --numeric-owner -cf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp *
