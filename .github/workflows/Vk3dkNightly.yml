@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Job 1 Locked + Job 2 Arihany Exact)
+name: Build VKD3D-Proton (Final Arihany Exact)
 
 on:
   workflow_dispatch:
@@ -123,7 +123,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (ARIHANY EXACT REPLICATION)
+  # JOB 2: ARM64EC BUILD (REPLICATING ARIHANY'S EXACT SCRIPTS)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -138,6 +138,7 @@ jobs:
             llvm crossbuild-essential-arm64
 
       - name: Setup Arihany Build Env
+        # Logic from: setup-llvm-meson.sh
         run: |
           python3 -m venv .venv
           .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1"
@@ -150,11 +151,13 @@ jobs:
           sudo tar -C "$TOOLCHAIN" --strip-components=1 -xJf llvm.tar.xz
           echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
 
-      - name: Install SPIRV-Headers (Strict Match)
+      - name: Install SPIRV-Headers (Specific Targets Only)
+        # Logic from: setup-llvm-meson.sh (Lines 26-36)
+        # CRITICAL: She only installs headers for x86_64 and i686, NOT arm64ec.
         run: |
           SPV_TMP="$(mktemp -d)"
           git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers.git "$SPV_TMP"
-          # Only installing to x86_64/i686 as per setup-llvm-meson.sh
+          
           for trip in x86_64-w64-mingw32 i686-w64-mingw32; do
             if [ -d "/opt/llvm-mingw/$trip/include" ]; then
               sudo mkdir -p "/opt/llvm-mingw/$trip/include/spirv"
@@ -167,7 +170,6 @@ jobs:
         with:
           repository: HansKristian-Work/vkd3d-proton
           submodules: recursive
-          fetch-depth: 0
           path: src
 
       - name: Generate Version Name
@@ -178,8 +180,8 @@ jobs:
 
       - name: Build & Stage (Arihany Logic)
         run: |
-          # The exact cross-file from arm64ec.meson.ini.txt
-          # Using 'gcc' aliases and 'aarch64' cpu_family is strictly Arihany's method
+          # Logic from: arm64ec.meson.ini.txt
+          # CRITICAL: Using 'gcc' aliases and spoofing 'aarch64' cpu_family
           cat <<EOF > arm64ec.ini
           [binaries]
           c = 'arm64ec-w64-mingw32-gcc'
@@ -195,6 +197,7 @@ jobs:
           endian = 'little'
           EOF
 
+          # Standard x86 cross-file
           cat <<EOF > x86.ini
           [binaries]
           c = 'i686-w64-mingw32-gcc'
@@ -211,21 +214,28 @@ jobs:
           EOF
 
           cd src
+          # Logic from: guts-arm64ec.sh
+          # Note: We do NOT disable LTO because Arihany's guts script does not.
+          # We disable 'strip' here to handle it manually in the packing step.
+          
+          # Build ARM64EC
           meson setup build_ec --cross-file ../arm64ec.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=false
           ninja -C build_ec install
           
+          # Build x86 (32-bit)
           meson setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86"
           ninja -C build_x86 install
 
-      - name: Package ARM64EC (Arihany Packing)
+      - name: Package ARM64EC (Arihany Packing Logic)
         run: |
           rm -rf final_package
           mkdir -p final_package/system32 final_package/syswow64
           
+          # Logic from: packing.sh & guts-arm64ec.sh
           cp -L src/stage/ec/bin/*.dll final_package/system32/
           cp -L src/stage/x86/bin/*.dll final_package/syswow64/
 
-          # Manual Strip from packing.sh
+          # Manual Strip (Matches packing.sh line 79)
           /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/*.dll
           /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/syswow64/*.dll
 
@@ -245,13 +255,17 @@ jobs:
               [ -e "$f" ] || continue
               REL_PATH=${f#final_package/}
               FOLDER=$(dirname "$REL_PATH")
+              
+              # Target mapping from vkd3d-proton-arm64ec.sh
               if [[ "$FOLDER" == "system32" ]]; then TARGET="\${system32}"; else TARGET="\${syswow64}"; fi
+              
               jq --arg src "$REL_PATH" --arg tgt "$TARGET/$(basename "$f")" \
                  '.files += [{"source": $src, "target": $tgt}]' \
                  final_package/profile.json > final_package/tmp.json && mv final_package/tmp.json final_package/profile.json
           done
 
-          # Packing with ZSTD and Numeric Owner
+          # Packing: ZSTD + Numeric Owner (Matches packing.sh line 107)
+          # CRITICAL: --numeric-owner prevents permission issues on Android
           chmod -R 777 final_package
           cd final_package
           tar --zstd --format=gnu --owner=0 --group=0 --numeric-owner -cf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp *
