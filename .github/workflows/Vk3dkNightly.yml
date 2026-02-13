@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Clang 20251216 Fix)
+name: Build VKD3D-Proton (Linker Override Fix)
 
 on:
   workflow_dispatch:
@@ -123,7 +123,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (ARCH LINUX + CLANG 20251216)
+  # JOB 2: ARM64EC BUILD (ARCH LINUX + LINKER OVERRIDE)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -146,7 +146,7 @@ jobs:
           python -m venv .venv
           .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1"
           
-          # FIX: Matching Arihany's exact toolchain version 
+          # Use NEWER Toolchain (20251216) to match Arihany/Clang capabilities
           LLVM_TAG="20251216"
           TOOLCHAIN="/opt/llvm-mingw"
           mkdir -p "$TOOLCHAIN"
@@ -156,13 +156,14 @@ jobs:
           echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
 
-      - name: Install SPIRV-Headers (AArch64)
+      - name: Install SPIRV-Headers (Specific Targets)
         run: |
           SPV_TMP="$(mktemp -d)"
           git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers.git "$SPV_TMP"
           
-          # Install to ALL paths (including aarch64 and arm64ec)
-          for trip in aarch64-w64-mingw32 arm64ec-w64-mingw32 i686-w64-mingw32; do
+          # Mimic Arihany: Install to x86/x64 but NOT arm64ec
+          # This forces the compiler to fallback to x64 headers, which helps the spoof
+          for trip in x86_64-w64-mingw32 i686-w64-mingw32; do
             if [ -d "/opt/llvm-mingw/$trip/include" ]; then
               mkdir -p "/opt/llvm-mingw/$trip/include/spirv"
               cp -r "$SPV_TMP/include/spirv/"* "/opt/llvm-mingw/$trip/include/spirv/"
@@ -176,22 +177,24 @@ jobs:
           COMMIT_HASH=$(git rev-parse --short HEAD)
           echo "VERSION_NAME=3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
 
-      - name: Build & Stage (Native AArch64 + Clang + EC Flag)
+      - name: Build & Stage (Linker Override)
         run: |
-          # FIX: Using 'clang' with the Newer Toolchain to handle -marm64ec
-          cat <<EOF > bylaws.ini
+          # The Magic: We use the GCC wrapper, BUT we order the linker 
+          # to use the 'arm64' machine type explicitly.
+          
+          cat <<EOF > arm64ec.ini
           [binaries]
-          c = 'aarch64-w64-mingw32-clang'
-          cpp = 'aarch64-w64-mingw32-clang++'
-          ar = 'llvm-ar'
+          c = 'arm64ec-w64-mingw32-gcc'
+          cpp = 'arm64ec-w64-mingw32-g++'
+          ar = 'arm64ec-w64-mingw32-ar'
           strip = 'llvm-strip'
-          windres = 'aarch64-w64-mingw32-windres'
-          widl = 'aarch64-w64-mingw32-widl'
+          windres = 'arm64ec-w64-mingw32-windres'
+          widl = 'arm64ec-w64-mingw32-widl'
           
           [built-in options]
-          # The key to Hybrid Build: Native Header + EC Code
-          c_args = ['-marm64ec']
-          cpp_args = ['-marm64ec']
+          # Force the linker to write 0xAA64 (Machine ARM64)
+          c_link_args = ['-Wl,--machine,arm64']
+          cpp_link_args = ['-Wl,--machine,arm64']
           
           [host_machine]
           system = 'windows'
@@ -202,8 +205,8 @@ jobs:
 
           cat <<EOF > x86.ini
           [binaries]
-          c = 'i686-w64-mingw32-clang'
-          cpp = 'i686-w64-mingw32-clang++'
+          c = 'i686-w64-mingw32-gcc'
+          cpp = 'i686-w64-mingw32-g++'
           ar = 'llvm-ar'
           strip = 'llvm-strip'
           windres = 'i686-w64-mingw32-windres'
@@ -216,7 +219,8 @@ jobs:
           EOF
 
           cd src
-          meson setup build_ec --cross-file ../bylaws.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=true -Db_lto=false
+          # Enable stripping in Meson (so we don't have to do it manually)
+          meson setup build_ec --cross-file ../arm64ec.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=true
           ninja -C build_ec install
           
           meson setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86" -Dstrip=true
@@ -227,7 +231,7 @@ jobs:
           echo "=========================================="
           echo "VERIFYING DLL ARCHITECTURE..."
           
-          # This should be AARCH64 (0xAA64) by definition
+          # We expect AARCH64 (0xAA64) because we forced the linker
           MACHINE_TYPE=$(/opt/llvm-mingw/bin/llvm-readobj -h src/stage/ec/bin/d3d12.dll | grep "Machine:")
           echo "FOUND: $MACHINE_TYPE"
           
@@ -276,5 +280,5 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: vkd3d-bylaws-docker
+          name: vkd3d-linker-override
           path: '*.wcp'
