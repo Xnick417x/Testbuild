@@ -131,7 +131,8 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update -y
-          # REMOVED 'meson' and 'ninja-build' to prevent system version conflict
+          # FIX: REMOVED 'meson' and 'ninja-build' to prevent system version conflict
+          # Arihany installs these via pip only
           sudo apt-get install -y --no-install-recommends \
             ca-certificates curl xz-utils jq git glslang-tools \
             build-essential python3 python3-venv python3-pip \
@@ -180,10 +181,11 @@ jobs:
 
       - name: Build & Stage (Arihany Logic)
         run: |
-          # Debug: Ensure correct Meson is used
+          # Debug: Ensure correct Meson is used (Should be 1.2.3)
           which meson
           meson --version
           
+          #
           cat <<EOF > arm64ec.ini
           [binaries]
           c = 'arm64ec-w64-mingw32-gcc'
@@ -215,7 +217,7 @@ jobs:
           EOF
 
           cd src
-          # Build ARM64EC (Using pip meson)
+          # Build ARM64EC (Using pip meson which respects the spoof)
           meson setup build_ec --cross-file ../arm64ec.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=false
           ninja -C build_ec install
           
@@ -226,6 +228,7 @@ jobs:
       - name: Verify Architecture (Debug Step)
         run: |
           echo "Checking PE Header for ARM64EC binary..."
+          # If this says 'ARM64EC' instead of 'ARM64' or 'AARCH64', the spoof failed.
           if [ -f src/stage/ec/bin/d3d12.dll ]; then
             /opt/llvm-mingw/bin/llvm-readobj -h src/stage/ec/bin/d3d12.dll | grep -E "Machine:|ImageOptionalHeader" || true
           else
@@ -266,7 +269,7 @@ jobs:
                  final_package/profile.json > final_package/tmp.json && mv final_package/tmp.json final_package/profile.json
           done
 
-          # Packing with ZSTD + Numeric Owner (Critical for Android)
+          # Packing with ZSTD + Numeric Owner
           chmod -R 777 final_package
           cd final_package
           tar --zstd --format=gnu --owner=0 --group=0 --numeric-owner -cf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp *
