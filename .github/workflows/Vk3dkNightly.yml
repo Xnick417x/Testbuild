@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Syntax Fix)
+name: Build VKD3D-Proton (Linker Unix Flag Fix)
 
 on:
   workflow_dispatch:
@@ -123,7 +123,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (ARCH LINUX + CORRECT LINKER SYNTAX)
+  # JOB 2: ARM64EC BUILD (ARCH LINUX + UNIX LINKER FLAG)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -146,7 +146,7 @@ jobs:
           python -m venv .venv
           .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1"
           
-          # NEWER Toolchain (20251216) - Matching Arihany
+          # Use NEWER Toolchain (20251216)
           LLVM_TAG="20251216"
           TOOLCHAIN="/opt/llvm-mingw"
           mkdir -p "$TOOLCHAIN"
@@ -161,7 +161,7 @@ jobs:
           SPV_TMP="$(mktemp -d)"
           git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers.git "$SPV_TMP"
           
-          # Install to x64 only (Arihany Logic) to force fallback behavior
+          # Mimic Arihany: Install to x86/x64 but NOT arm64ec
           for trip in x86_64-w64-mingw32 i686-w64-mingw32; do
             if [ -d "/opt/llvm-mingw/$trip/include" ]; then
               mkdir -p "/opt/llvm-mingw/$trip/include/spirv"
@@ -178,8 +178,8 @@ jobs:
 
       - name: Build & Stage (Linker Override Fix)
         run: |
-          # Use standard 'arm64ec' wrappers so Meson detects them correctly.
-          # But pass the CORRECT Windows-style linker flag: -machine:arm64
+          # The Solution: Use the Unix linker flag syntax '-m aarch64pe'
+          # This forces ld.lld (the underlying linker) to output an AArch64 PE.
           
           cat <<EOF > arm64ec.ini
           [binaries]
@@ -191,10 +191,9 @@ jobs:
           widl = 'arm64ec-w64-mingw32-widl'
           
           [built-in options]
-          # Force the linker to write 0xAA64 (Machine ARM64)
-          # SYNTAX FIX: -Wl,-machine:arm64 (Windows style)
-          c_link_args = ['-Wl,-machine:arm64']
-          cpp_link_args = ['-Wl,-machine:arm64']
+          # The Correct Unix Flag for ld.lld
+          c_link_args = ['-Wl,-m,aarch64pe']
+          cpp_link_args = ['-Wl,-m,aarch64pe']
           
           [host_machine]
           system = 'windows'
@@ -219,7 +218,6 @@ jobs:
           EOF
 
           cd src
-          # Using strip=true inside Meson so it respects linker flags during install
           meson setup build_ec --cross-file ../arm64ec.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=true
           ninja -C build_ec install
           
