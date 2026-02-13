@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Native AArch64 Docker)
+name: Build VKD3D-Proton (Clang 20251216 Fix)
 
 on:
   workflow_dispatch:
@@ -123,7 +123,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (NATIVE COMPILER IN DOCKER)
+  # JOB 2: ARM64EC BUILD (ARCH LINUX + CLANG 20251216)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -146,8 +146,8 @@ jobs:
           python -m venv .venv
           .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1"
           
-          # Use STABLE Bylaws toolchain (20251104)
-          LLVM_TAG="20251104"
+          # FIX: Matching Arihany's exact toolchain version 
+          LLVM_TAG="20251216"
           TOOLCHAIN="/opt/llvm-mingw"
           mkdir -p "$TOOLCHAIN"
           wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_TAG/llvm-mingw-$LLVM_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
@@ -161,7 +161,7 @@ jobs:
           SPV_TMP="$(mktemp -d)"
           git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers.git "$SPV_TMP"
           
-          # Install to BOTH aarch64 and arm64ec paths to be safe
+          # Install to ALL paths (including aarch64 and arm64ec)
           for trip in aarch64-w64-mingw32 arm64ec-w64-mingw32 i686-w64-mingw32; do
             if [ -d "/opt/llvm-mingw/$trip/include" ]; then
               mkdir -p "/opt/llvm-mingw/$trip/include/spirv"
@@ -176,19 +176,20 @@ jobs:
           COMMIT_HASH=$(git rev-parse --short HEAD)
           echo "VERSION_NAME=3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
 
-      - name: Build & Stage (Native AArch64 + EC Flag)
+      - name: Build & Stage (Native AArch64 + Clang + EC Flag)
         run: |
-          # The Magic: Use 'aarch64' compiler but pass '-marm64ec'
+          # FIX: Using 'clang' with the Newer Toolchain to handle -marm64ec
           cat <<EOF > bylaws.ini
           [binaries]
-          c = 'aarch64-w64-mingw32-gcc'
-          cpp = 'aarch64-w64-mingw32-g++'
-          ar = 'aarch64-w64-mingw32-ar'
+          c = 'aarch64-w64-mingw32-clang'
+          cpp = 'aarch64-w64-mingw32-clang++'
+          ar = 'llvm-ar'
           strip = 'llvm-strip'
           windres = 'aarch64-w64-mingw32-windres'
           widl = 'aarch64-w64-mingw32-widl'
           
           [built-in options]
+          # The key to Hybrid Build: Native Header + EC Code
           c_args = ['-marm64ec']
           cpp_args = ['-marm64ec']
           
@@ -201,8 +202,8 @@ jobs:
 
           cat <<EOF > x86.ini
           [binaries]
-          c = 'i686-w64-mingw32-gcc'
-          cpp = 'i686-w64-mingw32-g++'
+          c = 'i686-w64-mingw32-clang'
+          cpp = 'i686-w64-mingw32-clang++'
           ar = 'llvm-ar'
           strip = 'llvm-strip'
           windres = 'i686-w64-mingw32-windres'
@@ -215,7 +216,6 @@ jobs:
           EOF
 
           cd src
-          # Disable LTO to prevent linker from stripping EC symbols
           meson setup build_ec --cross-file ../bylaws.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=true -Db_lto=false
           ninja -C build_ec install
           
@@ -227,7 +227,7 @@ jobs:
           echo "=========================================="
           echo "VERIFYING DLL ARCHITECTURE..."
           
-          # Since we used the AArch64 compiler, this SHOULD be 0xAA64 by default.
+          # This should be AARCH64 (0xAA64) by definition
           MACHINE_TYPE=$(/opt/llvm-mingw/bin/llvm-readobj -h src/stage/ec/bin/d3d12.dll | grep "Machine:")
           echo "FOUND: $MACHINE_TYPE"
           
