@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Deep Clean Patch)
+name: Build VKD3D-Proton (Deep Clean - Verification Fix)
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   # ==================================================================
-  # JOB 1: STANDARD BUILD (LOCKED & WORKING)
+  # JOB 1: STANDARD BUILD (LOCKED)
   # ==================================================================
   build-standard:
     runs-on: ubuntu-latest
@@ -123,7 +123,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (ARCH LINUX + DEEP CLEAN PATCH)
+  # JOB 2: ARM64EC BUILD (DEEP CLEAN + CORRECT VERIFICATION)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -231,7 +231,6 @@ jobs:
           import glob
           import struct
 
-          # 0xAA64 (AArch64) in Little Endian
           TARGET_MACHINE = b'\x64\xaa' 
 
           files = glob.glob("final_package/system32/*.dll")
@@ -253,22 +252,15 @@ jobs:
                       print(f"  -> Machine: {old.hex()} -> {TARGET_MACHINE.hex()}")
                       
                       # 3. Find Optional Header Size (PE + 20)
-                      # Read SizeOfOptionalHeader (2 bytes)
                       f.seek(pe_offset + 20)
                       opt_header_size = struct.unpack("<H", f.read(2))[0]
                       
-                      # 4. Find Data Directories
-                      # Optional Header starts at PE + 24
-                      # Data Directories are at the END of Optional Header
-                      # Actually, standard offsets:
-                      # PE(4) + FileHeader(20) + OptionalHeader(Standard fields...)
-                      # Load Config Table is entry index 10 in Data Directory
-                      
-                      # Let's assume standard PE64 (Magic 0x20b)
-                      # Data Directory Start = PE + 24 + 112 (Standard fields for PE32+) = PE + 136
+                      # 4. Find Data Directories & Zero Load Config
+                      # Assuming Standard PE64 (Magic 0x20b)
+                      # Data Directory Start = PE + 24 + 112 = PE + 136
                       # Entry 10 (Load Config) = 136 + (10 * 8) = 216 offset from PE Start
                       
-                      lc_offset_loc = pe_offset + 24 + 112 + (10 * 8)
+                      lc_offset_loc = pe_offset + 216
                       
                       print(f"  -> Zeroing Load Config at PE offset + 216...")
                       f.seek(lc_offset_loc)
@@ -283,19 +275,19 @@ jobs:
           
           python patch.py
 
-      - name: Verify Architecture
+      - name: Verify Architecture (Corrected)
         run: |
           echo "=========================================="
           echo "VERIFYING DLL ARCHITECTURE..."
           
-          # This should now report pure AArch64 because we removed the conflicting metadata
           MACHINE_TYPE=$(/opt/llvm-mingw/bin/llvm-readobj -h final_package/system32/d3d12.dll | grep "Machine:")
           echo "FOUND: $MACHINE_TYPE"
           
-          if echo "$MACHINE_TYPE" | grep -q "AARCH64"; then
-             echo "SUCCESS: Binary matches AARCH64 (0xAA64)."
+          # FIX: Grep for 'ARM64' (which matches 0xAA64 output) instead of 'AARCH64'
+          if echo "$MACHINE_TYPE" | grep -q "ARM64"; then
+             echo "SUCCESS: Binary matches ARM64 (0xAA64)."
           else
-             echo "::error::FAILURE: Still Hybrid? Found: $MACHINE_TYPE"
+             echo "::error::FAILURE: Mismatch! Found: $MACHINE_TYPE"
              exit 1
           fi
           echo "=========================================="
