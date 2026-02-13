@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Bylaws FEX Method)
+name: Build VKD3D-Proton (Perl Patch Fix)
 
 on:
   workflow_dispatch:
@@ -123,34 +123,22 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: BYLAWS/FEX METHOD (Native AArch64 + EC Flags)
+  # JOB 2: ARM64EC BUILD (WITH PERL HEADER PATCH)
   # ==================================================================
-  build-bylaws-fex:
+  build-arm64ec:
     runs-on: ubuntu-latest
     steps:
       - name: Install Dependencies
         run: |
           sudo apt-get update -y
+          # Remove system meson
           sudo apt-get remove -y meson || true
           
           sudo apt-get install -y --no-install-recommends \
             ca-certificates curl xz-utils jq git glslang-tools \
-            build-essential python3 python3-pip pkg-config \
-            zstd cmake ninja-build
-
-      - name: Setup Toolchain (Bylaws Stable 20251104)
-        run: |
-          # USING OLDER TOOLCHAIN AS PER SETUP-LLVM.SH COMMENTS
-          LLVM_MINGW_TAG="20251104"
-          TOOLCHAIN_DIR="/opt/llvm-mingw"
-          wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW_TAG/llvm-mingw-$LLVM_MINGW_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
-          sudo rm -rf "$TOOLCHAIN_DIR"
-          sudo mkdir -p "$TOOLCHAIN_DIR"
-          sudo tar -C "$TOOLCHAIN_DIR" --strip-components=1 -xJf llvm.tar.xz
-          echo "$TOOLCHAIN_DIR/bin" >> $GITHUB_PATH
-
-      - name: Install Meson (Pinned 1.2.3)
-        run: pip3 install "meson==1.2.3"
+            build-essential python3 python3-venv python3-pip \
+            pkg-config cmake ninja-build zstd dos2unix perl tar unzip \
+            llvm crossbuild-essential-arm64
 
       - name: Checkout VKD3D
         uses: actions/checkout@v4
@@ -159,12 +147,25 @@ jobs:
           submodules: recursive
           path: src
 
+      - name: Setup Arihany Build Env
+        run: |
+          python3 -m venv .venv
+          .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1"
+          echo "$PWD/.venv/bin" >> $GITHUB_PATH
+          
+          # STABLE TOOLCHAIN (20251104) - Matches what works for FEX/Bylaws
+          LLVM_TAG="20251104"
+          TOOLCHAIN="/opt/llvm-mingw"
+          wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_TAG/llvm-mingw-$LLVM_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
+          sudo rm -rf "$TOOLCHAIN" && sudo mkdir -p "$TOOLCHAIN"
+          sudo tar -C "$TOOLCHAIN" --strip-components=1 -xJf llvm.tar.xz
+          echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
+
       - name: Install SPIRV-Headers
         run: |
           SPV_TMP="$(mktemp -d)"
           git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers.git "$SPV_TMP"
-          # Install to AARCH64 because we are using the AARCH64 compiler
-          for trip in aarch64-w64-mingw32 i686-w64-mingw32; do
+          for trip in x86_64-w64-mingw32 i686-w64-mingw32; do
             if [ -d "/opt/llvm-mingw/$trip/include" ]; then
               sudo mkdir -p "/opt/llvm-mingw/$trip/include/spirv"
               sudo cp -r "$SPV_TMP/include/spirv/"* "/opt/llvm-mingw/$trip/include/spirv/"
@@ -177,24 +178,19 @@ jobs:
           COMMIT_HASH=$(git rev-parse --short HEAD)
           echo "VERSION_NAME=3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
 
-      - name: Build & Stage (Bylaws Method)
+      - name: Build & Stage (Arihany Logic - arm64ec)
         run: |
-          # CROSS FILE: Using NATIVE AARCH64 COMPILER
-          # This guarantees the header is 0xAA64 (AARCH64)
-          cat <<EOF > bylaws.ini
+          MESON_BIN="$GITHUB_WORKSPACE/.venv/bin/meson"
+          
+          # Cross-file: Standard Arihany config
+          cat <<EOF > arm64ec.ini
           [binaries]
-          c = 'aarch64-w64-mingw32-gcc'
-          cpp = 'aarch64-w64-mingw32-g++'
-          ar = 'aarch64-w64-mingw32-ar'
+          c = 'arm64ec-w64-mingw32-gcc'
+          cpp = 'arm64ec-w64-mingw32-g++'
+          ar = 'arm64ec-w64-mingw32-ar'
           strip = 'llvm-strip'
-          windres = 'aarch64-w64-mingw32-windres'
-          widl = 'aarch64-w64-mingw32-widl'
-          
-          [properties]
-          # THE MAGIC: Force EC code generation inside AArch64 binary
-          c_args = ['-marm64ec']
-          cpp_args = ['-marm64ec']
-          
+          windres = 'arm64ec-w64-mingw32-windres'
+          widl = 'arm64ec-w64-mingw32-widl'
           [host_machine]
           system = 'windows'
           cpu_family = 'aarch64'
@@ -218,31 +214,13 @@ jobs:
           EOF
 
           cd src
-          # LTO Disabled to prevent linker from optimizing away the EC structure
-          meson setup build_ec --cross-file ../bylaws.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=true -Db_lto=false
+          $MESON_BIN setup build_ec --cross-file ../arm64ec.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=false
           ninja -C build_ec install
           
-          meson setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86" -Dstrip=true
+          $MESON_BIN setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86"
           ninja -C build_x86 install
 
-      - name: VERIFY ARCHITECTURE
-        run: |
-          echo "=========================================="
-          echo "VERIFYING DLL ARCHITECTURE..."
-          
-          MACHINE_TYPE=$(/opt/llvm-mingw/bin/llvm-readobj -h src/stage/ec/bin/d3d12.dll | grep "Machine:")
-          echo "FOUND: $MACHINE_TYPE"
-          
-          # Since we used the AARCH64 compiler, this MUST be AARCH64.
-          if echo "$MACHINE_TYPE" | grep -q "AARCH64"; then
-             echo "SUCCESS: Binary matches AARCH64 (0xAA64)."
-          else
-             echo "::error::FAILURE: Unexpected Architecture: $MACHINE_TYPE"
-             exit 1
-          fi
-          echo "=========================================="
-
-      - name: Package Final
+      - name: Stage & Strip (Pre-Patch)
         run: |
           rm -rf final_package
           mkdir -p final_package/system32 final_package/syswow64
@@ -250,6 +228,58 @@ jobs:
           cp -L src/stage/ec/bin/*.dll final_package/system32/
           cp -L src/stage/x86/bin/*.dll final_package/syswow64/
 
+          echo "Stripping binaries..."
+          /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/*.dll
+          /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/syswow64/*.dll
+
+      - name: PERL HEADER PATCH (FORCE OVERWRITE)
+        run: |
+          echo "==================================================="
+          echo " PERL PATCHING: 0xA641 (EC) -> 0xAA64 (ARM64)"
+          echo "==================================================="
+          
+          # Force Writable
+          chmod -R 777 final_package
+          sync
+          
+          # Find DLLs
+          find final_package/system32 -name "*.dll" > dll_list.txt
+          
+          # Use Perl to byte-replace the Machine ID
+          # 0xA641 = \x41\xa6 (Little Endian)
+          # 0xAA64 = \x64\xaa (Little Endian)
+          # We check the PE Header offset at 0x3C, then jump to that + 4 bytes to find machine type
+          
+          while read -r file; do
+            echo "Patching $file..."
+            
+            # Reads PE Offset (4 bytes at 0x3C), adds 4 to get Machine Type Offset, writes new bytes
+            perl -i -pe 'BEGIN{$/=\1} if(tell()==0x3C){read ARGV,$o,4; $off=unpack("V",$o)+4; seek ARGV,$off,0; print "\x64\xaa"; seek ARGV,0,2}' "$file"
+            
+          done < dll_list.txt
+          
+          sync
+
+      - name: VERIFY ARCHITECTURE (Final Check)
+        run: |
+          echo "=========================================="
+          echo "VERIFYING DLL ARCHITECTURE AFTER PATCH..."
+          
+          # Check the Header of d3d12.dll
+          MACHINE_TYPE=$(/opt/llvm-mingw/bin/llvm-readobj -h final_package/system32/d3d12.dll | grep "Machine:")
+          echo "FOUND: $MACHINE_TYPE"
+          
+          if echo "$MACHINE_TYPE" | grep -q "AARCH64"; then
+             echo "SUCCESS: Binary matches AARCH64."
+          else
+             # If this fails, the Perl patch failed to seek correctly.
+             echo "::error::FAILURE: Patch failed! Still shows: $MACHINE_TYPE"
+             exit 1
+          fi
+          echo "=========================================="
+
+      - name: Package Final
+        run: |
           # Dynamic JSON
           echo "{}" > final_package/profile.json
           jq -n \
@@ -269,15 +299,4 @@ jobs:
               if [[ "$FOLDER" == "system32" ]]; then TARGET="\${system32}"; else TARGET="\${syswow64}"; fi
               jq --arg src "$REL_PATH" --arg tgt "$TARGET/$(basename "$f")" \
                  '.files += [{"source": $src, "target": $tgt}]' \
-                 final_package/profile.json > final_package/tmp.json && mv final_package/tmp.json final_package/profile.json
-          done
-
-          chmod -R 777 final_package
-          cd final_package
-          tar --zstd --format=gnu --owner=0 --group=0 --numeric-owner -cf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp *
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: vkd3d-bylaws-fex
-          path: '*.wcp'
+                 final_package/
