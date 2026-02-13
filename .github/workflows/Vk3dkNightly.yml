@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Arihany Exact - Meson 1.2.3 Pinned)
+name: Build VKD3D-Proton (Arihany Exact - Verified)
 
 on:
   workflow_dispatch:
@@ -18,8 +18,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             ca-certificates curl xz-utils jq git glslang-tools \
             build-essential python3 python3-pip pkg-config \
-            zstd
-          # NOTE: 'meson' and 'ninja-build' REMOVED to avoid conflict
+            meson ninja-build zstd
 
       - name: Setup Toolchain
         run: |
@@ -30,9 +29,6 @@ jobs:
           sudo mkdir -p "$TOOLCHAIN_DIR"
           sudo tar -C "$TOOLCHAIN_DIR" --strip-components=1 -xJf llvm.tar.xz
           echo "$TOOLCHAIN_DIR/bin" >> $GITHUB_PATH
-
-      - name: Install Build Tools (Standard - Pinned for Consistency)
-        run: pip3 install "meson==1.2.3" "ninja==1.11.1"
 
       - name: Checkout VKD3D
         uses: actions/checkout@v4
@@ -127,7 +123,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (ARIHANY EXACT - MESON 1.2.3 PINNED)
+  # JOB 2: ARM64EC BUILD (ARIHANY EXACT - MESON 1.2.3 FORCED)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -135,7 +131,10 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update -y
-          # STRICT FIX: 'meson' REMOVED from this list. 'ninja-build' is kept.
+          # FIX 1: Explicitly REMOVE any system meson that might exist on the runner
+          sudo apt-get remove -y meson || true
+          
+          # FIX 2: Install ONLY build tools, NO meson via apt
           sudo apt-get install -y --no-install-recommends \
             ca-certificates curl xz-utils jq git glslang-tools \
             build-essential python3 python3-venv python3-pip \
@@ -145,8 +144,7 @@ jobs:
       - name: Setup Arihany Build Env
         run: |
           python3 -m venv .venv
-          # FIX: Install EXACT version 1.2.3.
-          # This version is required for the spoof to work.
+          # FIX 3: Install EXACT version 1.2.3 in venv
           .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1"
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
           
@@ -185,9 +183,9 @@ jobs:
 
       - name: Build & Stage (Arihany Logic)
         run: |
-          # Debug: Verify we are using Meson 1.2.3
-          which meson
-          meson --version
+          # FIX 4: Verify we are using the OLD meson 1.2.3
+          echo "Checking meson version..."
+          ../.venv/bin/meson --version
           
           # Cross-file
           cat <<EOF > arm64ec.ini
@@ -221,23 +219,36 @@ jobs:
           EOF
 
           cd src
-          # Build ARM64EC - Must use pip meson 1.2.3
-          meson setup build_ec --cross-file ../arm64ec.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=false
+          # FIX 5: EXPLICITLY Call the venv meson. Do not rely on PATH.
+          ../.venv/bin/meson setup build_ec --cross-file ../arm64ec.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=false
           ninja -C build_ec install
           
           # Build x86
-          meson setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86"
+          ../.venv/bin/meson setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86"
           ninja -C build_x86 install
 
-      - name: Verify Architecture (Debug Step)
+      - name: VERIFY ARCHITECTURE (The Death Check)
         run: |
-          echo "Checking PE Header for ARM64EC binary..."
-          # If this says 'ARM64EC' instead of 'ARM64' or 'AARCH64', the spoof failed.
-          if [ -f src/stage/ec/bin/d3d12.dll ]; then
-            /opt/llvm-mingw/bin/llvm-readobj -h src/stage/ec/bin/d3d12.dll | grep -E "Machine:|ImageOptionalHeader" || true
-          else
-            echo "DLL not found, cannot verify."
+          echo "=========================================="
+          echo "VERIFYING DLL ARCHITECTURE..."
+          
+          # Check the Header
+          MACHINE_TYPE=$(/opt/llvm-mingw/bin/llvm-readobj -h src/stage/ec/bin/d3d12.dll | grep "Machine:")
+          echo "FOUND: $MACHINE_TYPE"
+          
+          # FAIL THE BUILD if it is not AARCH64 or ARM64
+          if echo "$MACHINE_TYPE" | grep -q "ARM64EC"; then
+            echo "::error::FAILURE: Meson overrode the spoof! The binary is ARM64EC (0xA641) which Winlator will reject."
+            exit 1
           fi
+          
+          if echo "$MACHINE_TYPE" | grep -qE "AARCH64|ARM64"; then
+             echo "SUCCESS: Binary is spoofed as AARCH64 (0xAA64). Winlator should accept this."
+          else
+             echo "::error::UNKNOWN ARCHITECTURE: $MACHINE_TYPE"
+             exit 1
+          fi
+          echo "=========================================="
 
       - name: Package ARM64EC (Arihany Packing Logic)
         run: |
