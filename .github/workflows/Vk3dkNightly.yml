@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Force Hex Patch)
+name: Build VKD3D-Proton (Unlock & Patch Final)
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   # ==================================================================
-  # JOB 1: STANDARD BUILD (LOCKED)
+  # JOB 1: STANDARD BUILD (LOCKED - Working)
   # ==================================================================
   build-standard:
     runs-on: ubuntu-latest
@@ -123,7 +123,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (WITH NUCLEAR HEADER PATCH)
+  # JOB 2: ARM64EC BUILD (WITH POST-STRIP PATCHING)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -131,7 +131,6 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update -y
-          # Remove system meson to be safe
           sudo apt-get remove -y meson || true
           
           sudo apt-get install -y --no-install-recommends \
@@ -177,10 +176,11 @@ jobs:
           COMMIT_HASH=$(git rev-parse --short HEAD)
           echo "VERSION_NAME=3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
 
-      - name: Build & Stage (Builds as ARM64EC)
+      - name: Build & Stage (Arihany Logic)
         run: |
           MESON_BIN="$GITHUB_WORKSPACE/.venv/bin/meson"
           
+          # Cross-file: Use 'aarch64' spoof, even if compiler ignores it
           cat <<EOF > arm64ec.ini
           [binaries]
           c = 'arm64ec-w64-mingw32-gcc'
@@ -218,82 +218,7 @@ jobs:
           $MESON_BIN setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86"
           ninja -C build_x86 install
 
-      - name: NUCLEAR HEADER PATCH (FORCE OVERWRITE)
-        run: |
-          echo "==================================================="
-          echo " SEARCHING FOR DLLs TO PATCH..."
-          echo "==================================================="
-          
-          # Find all DLLs in the 'ec' stage directory
-          find src/stage/ec -name "*.dll" > dll_list.txt
-          cat dll_list.txt
-          
-          cat <<EOF > force_patch.py
-          import sys
-          import os
-          
-          print("--- STARTING PYTHON PATCHER ---")
-          
-          try:
-              with open("dll_list.txt", "r") as f:
-                  files = [line.strip() for line in f if line.strip()]
-          except FileNotFoundError:
-              print("ERROR: dll_list.txt not found!")
-              sys.exit(1)
-          
-          if not files:
-              print("ERROR: No DLLs found in list!")
-              sys.exit(1)
-          
-          for file_path in files:
-              print(f"Checking: {file_path}")
-              try:
-                  with open(file_path, "r+b") as f:
-                      f.seek(0x3C)
-                      pe_offset = int.from_bytes(f.read(4), 'little')
-                      machine_offset = pe_offset + 4
-                      
-                      f.seek(machine_offset)
-                      current = f.read(2)
-                      print(f"  > Offset: {hex(machine_offset)} | Current Hex: {current.hex()}")
-                      
-                      if current == b'\x41\xa6':
-                          print("  > DETECTED ARM64EC (0xA641). OVERWRITING...")
-                          f.seek(machine_offset)
-                          f.write(b'\x64\xaa')
-                          print("  > SUCCESS: Wrote 0xAA64 (AARCH64)")
-                      elif current == b'\x64\xaa':
-                          print("  > SKIP: Already AARCH64")
-                      else:
-                          print(f"  > UNKNOWN TYPE: {current.hex()}")
-                          
-              except Exception as e:
-                  print(f"  > ERROR: {e}")
-                  sys.exit(1)
-          print("--- PATCHING COMPLETE ---")
-          EOF
-          
-          python3 force_patch.py
-
-      - name: VERIFY ARCHITECTURE (Final Check)
-        run: |
-          echo "=========================================="
-          echo "VERIFYING DLL ARCHITECTURE AFTER PATCH..."
-          
-          # Check the Header
-          MACHINE_TYPE=$(/opt/llvm-mingw/bin/llvm-readobj -h src/stage/ec/bin/d3d12.dll | grep "Machine:")
-          echo "FOUND: $MACHINE_TYPE"
-          
-          if echo "$MACHINE_TYPE" | grep -q "AARCH64"; then
-             echo "SUCCESS: Binary matches AARCH64."
-          else
-             # If this fails now, it means the disk write failed, which is impossible in CI.
-             echo "::error::FAILURE: Patch failed! Still shows: $MACHINE_TYPE"
-             exit 1
-          fi
-          echo "=========================================="
-
-      - name: Package ARM64EC
+      - name: Stage & Strip (Before Patching)
         run: |
           rm -rf final_package
           mkdir -p final_package/system32 final_package/syswow64
@@ -301,10 +226,77 @@ jobs:
           cp -L src/stage/ec/bin/*.dll final_package/system32/
           cp -L src/stage/x86/bin/*.dll final_package/syswow64/
 
-          # Manual Strip
+          # STRIP FIRST so it doesn't revert our patch later
+          echo "Stripping binaries..."
           /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/*.dll
           /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/syswow64/*.dll
 
+      - name: NUCLEAR HEADER PATCH (After Strip)
+        run: |
+          echo "==================================================="
+          echo " PATCHING DLL HEADERS TO AARCH64 (0xAA64)"
+          echo "==================================================="
+          
+          # 1. Force Permissions
+          chmod -R 777 final_package
+          
+          # 2. Python Patcher
+          cat <<EOF > patch_headers.py
+          import sys, glob
+          
+          files = glob.glob("final_package/system32/*.dll")
+          if not files:
+              print("ERROR: No DLLs found to patch!")
+              sys.exit(1)
+              
+          for path in files:
+              print(f"Processing: {path}")
+              try:
+                  with open(path, "r+b") as f:
+                      f.seek(0x3C)
+                      pe_offset = int.from_bytes(f.read(4), 'little')
+                      machine_offset = pe_offset + 4
+                      f.seek(machine_offset)
+                      current = f.read(2)
+                      print(f"  -> Found Header: {current.hex()}")
+                      
+                      # Patch if ARM64EC (A641)
+                      if current == b'\x41\xa6':
+                          print("  -> DETECTED ARM64EC. PATCHING to AARCH64...")
+                          f.seek(machine_offset)
+                          f.write(b'\x64\xaa') # 0xAA64
+                          
+                          # Verify Immediately
+                          f.seek(machine_offset)
+                          check = f.read(2)
+                          print(f"  -> VERIFY: Now reads {check.hex()}")
+                          if check != b'\x64\xaa':
+                              print("  -> ERROR: Write failed to persist!")
+                              sys.exit(1)
+                      elif current == b'\x64\xaa':
+                          print("  -> ALREADY AARCH64. No patch needed.")
+                      else:
+                          print(f"  -> UNKNOWN ARCH: {current.hex()}. Skipping.")
+              except Exception as e:
+                  print(f"Error: {e}")
+                  sys.exit(1)
+          EOF
+          
+          python3 patch_headers.py
+
+      - name: Final Verification
+        run: |
+          echo "Checking one last time via llvm-readobj..."
+          MACHINE=$(/opt/llvm-mingw/bin/llvm-readobj -h final_package/system32/d3d12.dll | grep "Machine:")
+          echo "$MACHINE"
+          if echo "$MACHINE" | grep -q "ARM64EC"; then
+             echo "::error::Build Failed: Header is still ARM64EC"
+             exit 1
+          fi
+
+      - name: Package Final
+        run: |
+          # Dynamic JSON
           echo "{}" > final_package/profile.json
           jq -n \
             --arg vn "${{ env.VERSION_NAME }}" \
@@ -326,7 +318,7 @@ jobs:
                  final_package/profile.json > final_package/tmp.json && mv final_package/tmp.json final_package/profile.json
           done
 
-          chmod -R 777 final_package
+          # Packing
           cd final_package
           tar --zstd --format=gnu --owner=0 --group=0 --numeric-owner -cf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp *
 
