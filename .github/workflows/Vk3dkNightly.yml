@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Repaired)
+name: Build VKD3D-Proton (Job 1 Locked + Job 2 Arihany Exact)
 
 on:
   workflow_dispatch:
@@ -167,6 +167,7 @@ jobs:
         with:
           repository: HansKristian-Work/vkd3d-proton
           submodules: recursive
+          fetch-depth: 0
           path: src
 
       - name: Generate Version Name
@@ -178,6 +179,7 @@ jobs:
       - name: Build & Stage (Arihany Logic)
         run: |
           # The exact cross-file from arm64ec.meson.ini.txt
+          # Using 'gcc' aliases and 'aarch64' cpu_family is strictly Arihany's method
           cat <<EOF > arm64ec.ini
           [binaries]
           c = 'arm64ec-w64-mingw32-gcc'
