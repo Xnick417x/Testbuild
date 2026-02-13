@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Job 1 Locked + Job 2 Fixed)
+name: Build VKD3D-Proton (Job 1 Locked + Job 2 FEX/Arihany Logic)
 
 on:
   workflow_dispatch:
@@ -8,6 +8,7 @@ on:
 jobs:
   # ==================================================================
   # JOB 1: STANDARD BUILD (LOCKED - Source: Vk3dkNightlyNoArm.yml.txt)
+  # Status: WORKING. DO NOT TOUCH.
   # ==================================================================
   build-standard:
     runs-on: ubuntu-latest
@@ -123,7 +124,9 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (Fixing Selection Issue)
+  # JOB 2: ARM64EC BUILD (THE FIX)
+  # Uses Arihany's 'arm64ec.meson.ini.txt' logic (cpu=aarch64)
+  # Uses FEX 'packing.sh' logic (numeric-owner)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -138,6 +141,7 @@ jobs:
           llvm crossbuild-essential-arm64
 
     - name: Setup Arihany Build Env
+      # Matches 'setup-llvm-meson.sh' exactly
       run: |
         python3 -m venv .venv
         .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1"
@@ -150,7 +154,8 @@ jobs:
         sudo tar -C "$TOOLCHAIN" --strip-components=1 -xJf llvm.tar.xz
         echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
 
-    - name: Install SPIRV-Headers (Arihany Fix)
+    - name: Install SPIRV-Headers
+      # Missing piece from 'setup-llvm-meson.sh'
       run: |
         SPV_TMP="$(mktemp -d)"
         git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers.git "$SPV_TMP"
@@ -172,11 +177,13 @@ jobs:
       run: |
         cd src
         COMMIT_HASH=$(git rev-parse --short HEAD)
+        # Restore dynamic naming logic
         echo "VERSION_NAME=3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
 
-    - name: Build & Stage (Arihany Logic)
+    - name: Build & Stage (Arihany Logic + AArch64 Fix)
       run: |
-        # Correct Cross-File: CPU Family MUST be aarch64 for Winlator
+        # THE FIX: cpu_family must be 'aarch64' even for arm64ec toolchain
+        # Matches 'arm64ec.meson.ini.txt'
         cat <<EOF > arm64ec.ini
         [binaries]
         c = 'arm64ec-w64-mingw32-clang'
@@ -184,7 +191,7 @@ jobs:
         ar = 'llvm-ar'
         strip = 'llvm-strip'
         windres = 'arm64ec-w64-mingw32-windres'
-        widl = '/opt/llvm-mingw/bin/arm64ec-w64-mingw32-widl'
+        widl = 'arm64ec-w64-mingw32-widl'
         [host_machine]
         system = 'windows'
         cpu_family = 'aarch64'
@@ -199,7 +206,7 @@ jobs:
         ar = 'llvm-ar'
         strip = 'llvm-strip'
         windres = 'i686-w64-mingw32-windres'
-        widl = '/opt/llvm-mingw/bin/i686-w64-mingw32-widl'
+        widl = 'i686-w64-mingw32-widl'
         [host_machine]
         system = 'windows'
         cpu_family = 'x86'
@@ -208,14 +215,15 @@ jobs:
         EOF
 
         cd src
-        # Install to PREFIX (Staging) like Arihany's guts script
+        # Install to PREFIX (Staging) - Matches 'guts-arm64ec.sh'
+        # Disable auto-strip so we can do it manually later
         meson setup build_ec --cross-file ../arm64ec.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=false -Db_lto=false
         ninja -C build_ec install
         
         meson setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86"
         ninja -C build_x86 install
 
-    - name: Package ARM64EC (Correct Targets & Description)
+    - name: Package ARM64EC (FEX/Arihany Packing Logic)
       run: |
         rm -rf final_package
         mkdir -p final_package/system32 final_package/syswow64
@@ -224,10 +232,12 @@ jobs:
         cp -L src/stage/ec/bin/*.dll final_package/system32/
         cp -L src/stage/x86/bin/*.dll final_package/syswow64/
 
-        # Manual Strip (Critical for Winlator)
-        /opt/llvm-mingw/bin/llvm-strip --strip-unneeded final_package/system32/*.dll
+        # Manual Strip (Matches 'packing.sh')
+        /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/*.dll
+        /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/syswow64/*.dll
 
-        # Dynamic JSON Generation (Fixed Description & Targets)
+        # Dynamic JSON Generation
+        # Matches logic from 'vkd3d-proton-arm64ec.sh' but dynamic
         echo "{}" > final_package/profile.json
         jq -n \
           --arg vn "${{ env.VERSION_NAME }}" \
@@ -239,12 +249,13 @@ jobs:
             files: []
           }' > final_package/profile.json
 
-        # Populate JSON loop with CORRECT Targets (\${system32})
+        # Populate JSON loop
         for f in final_package/system32/*.dll final_package/syswow64/*.dll; do
             [ -e "$f" ] || continue
             REL_PATH=${f#final_package/}
             FOLDER=$(dirname "$REL_PATH")
             
+            # Explicit targets as seen in vkd3d-proton-arm64ec.sh
             if [[ "$FOLDER" == "system32" ]]; then 
                 TARGET="\${system32}"
             else 
@@ -256,7 +267,8 @@ jobs:
                final_package/profile.json > final_package/tmp.json && mv final_package/tmp.json final_package/profile.json
         done
 
-        # Arihany Tar Logic (Clean Owners)
+        # THE PACKING FIX: Use strict tar arguments from 'packing.sh'
+        # --numeric-owner is CRITICAL for Android/Winlator permission mapping
         chmod -R 777 final_package
         cd final_package
         tar --format=gnu --owner=0 --group=0 --numeric-owner -cJf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp *
