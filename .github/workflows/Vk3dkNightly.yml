@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Bylaws Fix - No Wine Wrapper)
+name: Build VKD3D-Proton (Bylaws Full Flags Fix)
 
 on:
   workflow_dispatch:
@@ -123,7 +123,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (ARCH DOCKER + BYLAWS FIX)
+  # JOB 2: ARM64EC BUILD (FULL FLAGS - COMPILE & LINK)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -146,7 +146,7 @@ jobs:
           python -m venv .venv
           .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1"
           
-          # Use NEWER Toolchain (20251216) to support -marm64ec correctly
+          # Using New Toolchain to support flags
           LLVM_TAG="20251216"
           TOOLCHAIN="/opt/llvm-mingw"
           mkdir -p "$TOOLCHAIN"
@@ -161,7 +161,7 @@ jobs:
           SPV_TMP="$(mktemp -d)"
           git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers.git "$SPV_TMP"
           
-          # Install to ALL paths to ensure fallback works
+          # Install to ALL paths
           for trip in aarch64-w64-mingw32 arm64ec-w64-mingw32 i686-w64-mingw32; do
             if [ -d "/opt/llvm-mingw/$trip/include" ]; then
               mkdir -p "/opt/llvm-mingw/$trip/include/spirv"
@@ -176,9 +176,10 @@ jobs:
           COMMIT_HASH=$(git rev-parse --short HEAD)
           echo "VERSION_NAME=3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
 
-      - name: Build & Stage (Native AArch64 + EC Flag - No Wine)
+      - name: Build & Stage (Native AArch64 + Full EC Support)
         run: |
-          # Use Clang direct to bypass GCC wrapper confusion with -marm64ec
+          # THE FIX: We pass -marm64ec to BOTH Compiler AND Linker
+          
           cat <<EOF > bylaws.ini
           [binaries]
           c = 'aarch64-w64-mingw32-clang'
@@ -189,9 +190,13 @@ jobs:
           widl = 'aarch64-w64-mingw32-widl'
           
           [built-in options]
-          # Force EC code generation
+          # Compiler needs it to generate EC code
           c_args = ['-marm64ec']
           cpp_args = ['-marm64ec']
+          
+          # CRITICAL: Linker needs it to accept EC code and link correctly
+          c_link_args = ['-marm64ec', '-L/opt/llvm-mingw/arm64ec-w64-mingw32/lib']
+          cpp_link_args = ['-marm64ec', '-L/opt/llvm-mingw/arm64ec-w64-mingw32/lib']
           
           [host_machine]
           system = 'windows'
@@ -200,8 +205,6 @@ jobs:
           endian = 'little'
           EOF
 
-          # NOTE: 'exe_wrapper' is intentionally REMOVED to prevent build failure
-          
           cat <<EOF > x86.ini
           [binaries]
           c = 'i686-w64-mingw32-clang'
@@ -218,7 +221,7 @@ jobs:
           EOF
 
           cd src
-          # Disable LTO to keep EC symbols intact
+          # Disable LTO to prevent linker confusion with hybrid objects
           meson setup build_ec --cross-file ../bylaws.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=true -Db_lto=false
           ninja -C build_ec install
           
