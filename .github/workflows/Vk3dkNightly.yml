@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Perl Patch Fix)
+name: Build VKD3D-Proton (Python pefile Fix)
 
 on:
   workflow_dispatch:
@@ -123,7 +123,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (WITH PERL HEADER PATCH)
+  # JOB 2: ARM64EC BUILD (WITH PYTHON PEFILE FIX)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -131,7 +131,6 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update -y
-          # Remove system meson
           sudo apt-get remove -y meson || true
           
           sudo apt-get install -y --no-install-recommends \
@@ -139,6 +138,9 @@ jobs:
             build-essential python3 python3-venv python3-pip \
             pkg-config cmake ninja-build zstd dos2unix perl tar unzip \
             llvm crossbuild-essential-arm64
+
+          # Install pefile for safe header editing
+          pip3 install pefile
 
       - name: Checkout VKD3D
         uses: actions/checkout@v4
@@ -153,7 +155,7 @@ jobs:
           .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1"
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
           
-          # STABLE TOOLCHAIN (20251104) - Matches what works for FEX/Bylaws
+          # STABLE TOOLCHAIN (20251104)
           LLVM_TAG="20251104"
           TOOLCHAIN="/opt/llvm-mingw"
           wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_TAG/llvm-mingw-$LLVM_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
@@ -220,7 +222,7 @@ jobs:
           $MESON_BIN setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86"
           ninja -C build_x86 install
 
-      - name: Stage & Strip (Pre-Patch)
+      - name: Stage & Strip
         run: |
           rm -rf final_package
           mkdir -p final_package/system32 final_package/syswow64
@@ -232,48 +234,78 @@ jobs:
           /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/*.dll
           /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/syswow64/*.dll
 
-      - name: PERL HEADER PATCH (FORCE OVERWRITE)
+      - name: SAFE PE HEADER PATCH (Using pefile)
         run: |
           echo "==================================================="
-          echo " PERL PATCHING: 0xA641 (EC) -> 0xAA64 (ARM64)"
+          echo " PATCHING DLL HEADERS TO AARCH64 (0xAA64)"
           echo "==================================================="
           
-          # Force Writable
           chmod -R 777 final_package
-          sync
           
-          # Find DLLs
-          find final_package/system32 -name "*.dll" > dll_list.txt
-          
-          # Use Perl to byte-replace the Machine ID
-          # 0xA641 = \x41\xa6 (Little Endian)
-          # 0xAA64 = \x64\xaa (Little Endian)
-          # We check the PE Header offset at 0x3C, then jump to that + 4 bytes to find machine type
-          
-          while read -r file; do
-            echo "Patching $file..."
-            
-            # Reads PE Offset (4 bytes at 0x3C), adds 4 to get Machine Type Offset, writes new bytes
-            perl -i -pe 'BEGIN{$/=\1} if(tell()==0x3C){read ARGV,$o,4; $off=unpack("V",$o)+4; seek ARGV,$off,0; print "\x64\xaa"; seek ARGV,0,2}' "$file"
-            
-          done < dll_list.txt
-          
-          sync
+          cat <<EOF > patch_pe.py
+          import pefile
+          import glob
+          import sys
 
-      - name: VERIFY ARCHITECTURE (Final Check)
+          # Target: ARM64 Little Endian (0xAA64)
+          TARGET_MACHINE = 0xAA64 
+
+          dlls = glob.glob("final_package/system32/*.dll")
+          if not dlls:
+              print("Error: No DLLs found.")
+              sys.exit(1)
+
+          for dll in dlls:
+              print(f"Processing {dll}...")
+              try:
+                  pe = pefile.PE(dll)
+                  
+                  # Check current machine type
+                  current_machine = pe.FILE_HEADER.Machine
+                  print(f"  -> Current Machine: {hex(current_machine)}")
+
+                  if current_machine == 0xA641: # ARM64EC
+                      print("  -> Detected ARM64EC. Patching to AARCH64 (0xAA64)...")
+                      
+                      # Change Machine Type
+                      pe.FILE_HEADER.Machine = TARGET_MACHINE
+                      
+                      # Recalculate Checksum (Critical for validity)
+                      pe.OPTIONAL_HEADER.CheckSum = pe.generate_checksum()
+                      
+                      # Write back to file
+                      pe.write(dll)
+                      print("  -> Success: File patched and saved.")
+                  
+                  elif current_machine == TARGET_MACHINE:
+                      print("  -> Already AARCH64. Skipping.")
+                  
+                  else:
+                      print(f"  -> Unknown Machine Type {hex(current_machine)}. Skipping.")
+                  
+                  pe.close()
+
+              except Exception as e:
+                  print(f"  -> ERROR: {e}")
+                  sys.exit(1)
+          EOF
+          
+          python3 patch_pe.py
+
+      - name: Verify Architecture (Final Check)
         run: |
           echo "=========================================="
           echo "VERIFYING DLL ARCHITECTURE AFTER PATCH..."
           
           # Check the Header of d3d12.dll
+          # Note: If this fails with "invalid object", the patch corrupted it.
           MACHINE_TYPE=$(/opt/llvm-mingw/bin/llvm-readobj -h final_package/system32/d3d12.dll | grep "Machine:")
           echo "FOUND: $MACHINE_TYPE"
           
           if echo "$MACHINE_TYPE" | grep -q "AARCH64"; then
              echo "SUCCESS: Binary matches AARCH64."
           else
-             # If this fails, the Perl patch failed to seek correctly.
-             echo "::error::FAILURE: Patch failed! Still shows: $MACHINE_TYPE"
+             echo "::error::FAILURE: Header mismatch or corruption! Found: $MACHINE_TYPE"
              exit 1
           fi
           echo "=========================================="
@@ -299,4 +331,14 @@ jobs:
               if [[ "$FOLDER" == "system32" ]]; then TARGET="\${system32}"; else TARGET="\${syswow64}"; fi
               jq --arg src "$REL_PATH" --arg tgt "$TARGET/$(basename "$f")" \
                  '.files += [{"source": $src, "target": $tgt}]' \
-                 final_package/
+                 final_package/profile.json > final_package/tmp.json && mv final_package/tmp.json final_package/profile.json
+          done
+
+          cd final_package
+          tar --zstd --format=gnu --owner=0 --group=0 --numeric-owner -cf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp *
+
+      - name: Upload ARM64EC Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vkd3d-arm64ec
+          path: '*.wcp'
