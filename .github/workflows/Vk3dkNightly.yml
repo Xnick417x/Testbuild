@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (VENV Fix)
+name: Build VKD3D-Proton (Docker Container Fix)
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   # ==================================================================
-  # JOB 1: STANDARD BUILD (LOCKED - Reverted to ubuntu-latest)
+  # JOB 1: STANDARD BUILD (LOCKED & WORKING)
   # ==================================================================
   build-standard:
     runs-on: ubuntu-latest
@@ -123,21 +123,16 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (WITH VENV PATCH FIX)
+  # JOB 2: ARM64EC BUILD (DOCKER CONTAINER ISOLATION)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest  # Using Arch Linux to match enthusiast setups
     steps:
-      - name: Install Dependencies
+      - name: Install Dependencies (Arch Linux)
         run: |
-          sudo apt-get update -y
-          sudo apt-get remove -y meson || true
-          
-          sudo apt-get install -y --no-install-recommends \
-            ca-certificates curl xz-utils jq git glslang-tools \
-            build-essential python3 python3-venv python3-pip \
-            pkg-config cmake ninja-build zstd dos2unix perl tar unzip \
-            llvm crossbuild-essential-arm64
+          pacman -Sy --noconfirm git base-devel glslang python python-pip cmake ninja jq wget tar zstd
 
       - name: Checkout VKD3D
         uses: actions/checkout@v4
@@ -148,16 +143,20 @@ jobs:
 
       - name: Setup Arihany Build Env
         run: |
-          python3 -m venv .venv
-          .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1"
-          echo "$PWD/.venv/bin" >> $GITHUB_PATH
+          # Create python venv for Meson
+          python -m venv .venv
+          .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1" pefile
           
+          # Install Toolchain
           LLVM_TAG="20251104"
           TOOLCHAIN="/opt/llvm-mingw"
+          mkdir -p "$TOOLCHAIN"
           wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_TAG/llvm-mingw-$LLVM_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
-          sudo rm -rf "$TOOLCHAIN" && sudo mkdir -p "$TOOLCHAIN"
-          sudo tar -C "$TOOLCHAIN" --strip-components=1 -xJf llvm.tar.xz
+          tar -C "$TOOLCHAIN" --strip-components=1 -xJf llvm.tar.xz
+          
+          # Add to PATH for this step and future steps
           echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
+          echo "$PWD/.venv/bin" >> $GITHUB_PATH
 
       - name: Install SPIRV-Headers
         run: |
@@ -165,21 +164,22 @@ jobs:
           git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers.git "$SPV_TMP"
           for trip in x86_64-w64-mingw32 i686-w64-mingw32; do
             if [ -d "/opt/llvm-mingw/$trip/include" ]; then
-              sudo mkdir -p "/opt/llvm-mingw/$trip/include/spirv"
-              sudo cp -r "$SPV_TMP/include/spirv/"* "/opt/llvm-mingw/$trip/include/spirv/"
+              mkdir -p "/opt/llvm-mingw/$trip/include/spirv"
+              cp -r "$SPV_TMP/include/spirv/"* "/opt/llvm-mingw/$trip/include/spirv/"
             fi
           done
 
       - name: Generate Version Name
         run: |
           cd src
+          # Safe git config for container
+          git config --global --add safe.directory '*'
           COMMIT_HASH=$(git rev-parse --short HEAD)
           echo "VERSION_NAME=3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
 
-      - name: Build & Stage (Arihany Logic - arm64ec)
+      - name: Build & Stage (Arihany Logic)
         run: |
-          MESON_BIN="$GITHUB_WORKSPACE/.venv/bin/meson"
-          
+          # Cross-file: Standard Arihany config
           cat <<EOF > arm64ec.ini
           [binaries]
           c = 'arm64ec-w64-mingw32-gcc'
@@ -211,10 +211,10 @@ jobs:
           EOF
 
           cd src
-          $MESON_BIN setup build_ec --cross-file ../arm64ec.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=false
+          meson setup build_ec --cross-file ../arm64ec.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=false
           ninja -C build_ec install
           
-          $MESON_BIN setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86"
+          meson setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86"
           ninja -C build_x86 install
 
       - name: Stage & Strip
@@ -229,17 +229,13 @@ jobs:
           /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/*.dll
           /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/syswow64/*.dll
 
-      - name: SAFE PE HEADER PATCH (Isolated VENV)
+      - name: SAFE HEADER PATCH (Python inside Docker)
         run: |
           echo "==================================================="
-          echo " CREATING PATCHER VENV & RUNNING..."
+          echo " PATCHING DLL HEADERS TO AARCH64 (0xAA64)"
           echo "==================================================="
           
           chmod -R 777 final_package
-          
-          # FIX: Create a dedicated venv for patching to guarantee 'pefile' exists
-          python3 -m venv .venv_patch
-          .venv_patch/bin/pip install pefile
           
           cat <<EOF > patch_pe.py
           import pefile
@@ -258,40 +254,39 @@ jobs:
               try:
                   pe = pefile.PE(dll)
                   current_machine = pe.FILE_HEADER.Machine
-                  print(f"  -> Current Machine: {hex(current_machine)}")
-
+                  
                   if current_machine == 0xA641: # ARM64EC
-                      print("  -> Detected ARM64EC. Patching to AARCH64...")
+                      print("  -> Detected ARM64EC. Patching...")
                       pe.FILE_HEADER.Machine = TARGET_MACHINE
                       pe.OPTIONAL_HEADER.CheckSum = pe.generate_checksum()
                       pe.write(dll)
-                      print("  -> Success: File patched and saved.")
+                      pe.close()
+                      print("  -> Success.")
                   elif current_machine == TARGET_MACHINE:
                       print("  -> Already AARCH64. Skipping.")
                   else:
                       print(f"  -> Unknown Machine Type {hex(current_machine)}. Skipping.")
-                  
-                  pe.close()
 
               except Exception as e:
                   print(f"  -> ERROR: {e}")
                   sys.exit(1)
           EOF
           
-          # Run using the VENV python
-          .venv_patch/bin/python patch_pe.py
+          # Use the venv python we set up earlier
+          python patch_pe.py
 
       - name: Verify Architecture (Final Check)
         run: |
           echo "=========================================="
-          echo "VERIFYING DLL ARCHITECTURE AFTER PATCH..."
+          echo "VERIFYING DLL ARCHITECTURE..."
+          
           MACHINE_TYPE=$(/opt/llvm-mingw/bin/llvm-readobj -h final_package/system32/d3d12.dll | grep "Machine:")
           echo "FOUND: $MACHINE_TYPE"
           
           if echo "$MACHINE_TYPE" | grep -q "AARCH64"; then
              echo "SUCCESS: Binary matches AARCH64."
           else
-             echo "::error::FAILURE: Header mismatch or corruption! Found: $MACHINE_TYPE"
+             echo "::error::FAILURE: Header mismatch! Found: $MACHINE_TYPE"
              exit 1
           fi
           echo "=========================================="
