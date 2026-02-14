@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Arihany Exact Fixed)
+name: Build VKD3D-Proton (Arihany Pure - No Spoof)
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   # ==================================================================
-  # JOB 1: STANDARD BUILD (Reconstructed from Vk3dkNightlynoarm23)
+  # JOB 1: STANDARD BUILD (LOCKED - Source: Vk3dkNightlynoarm23.yml.txt)
   # ==================================================================
   build-standard:
     runs-on: ubuntu-latest
@@ -46,7 +46,6 @@ jobs:
 
       - name: Build Standard
         run: |
-          # x64 Crossfile
           cat <<EOF > cross-x64.txt
           [binaries]
           c = '/opt/llvm-mingw/bin/x86_64-w64-mingw32-clang'
@@ -64,7 +63,6 @@ jobs:
           endian = 'little'
           EOF
 
-          # x86 Crossfile
           cat <<EOF > cross-x86.txt
           [binaries]
           c = '/opt/llvm-mingw/bin/i686-w64-mingw32-clang'
@@ -91,14 +89,15 @@ jobs:
       - name: Package Standard
         run: |
           rm -rf final_package
-          mkdir -p final_package/system32 final_package/syswow64
+          mkdir -p final_package/system32
+          mkdir -p final_package/syswow64
           
           find src/build-x64 -name "d3d12.dll" -exec cp -L {} final_package/system32/ \;
           find src/build-x64 -name "d3d12core.dll" -exec cp -L {} final_package/system32/ \;
           find src/build-x86 -name "d3d12.dll" -exec cp -L {} final_package/syswow64/ \;
           find src/build-x86 -name "d3d12core.dll" -exec cp -L {} final_package/syswow64/ \;
           
-          # JSON exactly as you had it
+          # Exact JSON logic from your file
           cat <<EOF > final_package/profile.json
           {
             "type": "VKD3D",
@@ -123,11 +122,12 @@ jobs:
           name: vkd3d-standard
           path: '*.wcp'
 
+
   # ==================================================================
-  # JOB 2: ARIHANY REPLICA (GCC + UBUNTU 22.04 + STATIC + COMPLETE)
+  # JOB 2: ARIHANY REPLICA (GCC + STATIC + NO PATCH)
   # ==================================================================
   build-arm-arihany:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-22.04 # Arihany's Environment
     steps:
       - name: Install Dependencies
         run: |
@@ -175,7 +175,7 @@ jobs:
           COMMIT_HASH=$(git rev-parse --short HEAD)
           echo "VERSION_NAME=3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
 
-      - name: Build & Stage (GCC + STATIC LINKING)
+      - name: Build & Stage (GCC + STATIC)
         run: |
           # 1. ARM64EC (Using GCC Wrapper - Matches Arihany)
           cat <<EOF > arm64ec.ini
@@ -233,7 +233,7 @@ jobs:
           .venv/bin/meson setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86" -Dstrip=false
           .venv/bin/ninja -C build_x86 install
 
-      - name: Package & Verify
+      - name: Package
         run: |
           rm -rf final_package
           mkdir -p final_package/system32 final_package/syswow64
@@ -246,7 +246,7 @@ jobs:
           /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/*.dll
           /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/syswow64/*.dll
 
-          # 2. Dynamic JSON (Fixed to include ALL files)
+          # 2. Dynamic JSON (NO SPOOFING)
           echo "{}" > final_package/profile.json
           jq -n \
             --arg vn "${{ env.VERSION_NAME }}" \
