@@ -7,7 +7,7 @@ on:
 
 jobs:
   # ==================================================================
-  # JOB 1: STANDARD BUILD (LOCKED & WORKING)
+  # JOB 1: STANDARD BUILD (RESTORED TO ORIGINAL WORKING STATE)
   # ==================================================================
   build-standard:
     runs-on: ubuntu-latest
@@ -86,24 +86,26 @@ jobs:
         run: |
           rm -rf pkg_std
           mkdir -p pkg_std/system32 pkg_std/syswow64
+          # Standard path check
           cp src/build-x64/libs/d3d12/d3d12.dll pkg_std/system32/
           cp src/build-x64/libs/d3d12/d3d12core.dll pkg_std/system32/
           cp src/build-x86/libs/d3d12/d3d12.dll pkg_std/syswow64/
           cp src/build-x86/libs/d3d12/d3d12core.dll pkg_std/syswow64/
           
-          echo "{\"type\": \"VKD3D\", \"versionName\": \"${{ env.VERSION_NAME }}\", \"versionCode\": 0, \"files\": [{\"source\": \"system32/d3d12.dll\", \"target\": \"\${system32}/d3d12.dll\"}, {\"source\": \"system32/d3d12core.dll\", \"target\": \"\${system32}/d3d12core.dll\"}, {\"source\": \"syswow64/d3d12.dll\", \"target\": \"\${syswow64}/d3d12.dll\"}, {\"source\": \"syswow64/d3d12core.dll\", \"target\": \"\${syswow64}/d3d12core.dll\"}]}" > pkg_std/profile.json
+          # Single-line JSON for Ludashi compatibility
+          echo "{\"type\": \"VKD3D\", \"versionName\": \"${{ env.VERSION_NAME }}\", \"versionCode\": 0, \"description\": \"vkd3d-proton Nightly Standard\", \"files\": [{\"source\": \"system32/d3d12.dll\", \"target\": \"\${system32}/d3d12.dll\"}, {\"source\": \"system32/d3d12core.dll\", \"target\": \"\${system32}/d3d12core.dll\"}, {\"source\": \"syswow64/d3d12.dll\", \"target\": \"\${syswow64}/d3d12.dll\"}, {\"source\": \"syswow64/d3d12core.dll\", \"target\": \"\${syswow64}/d3d12core.dll\"}]}" > pkg_std/profile.json
           
           cd pkg_std && tar -cJf ../VKD3D-Standard-${{ env.VERSION_NAME }}.wcp *
 
       - name: Upload Standard
         uses: actions/upload-artifact@v4
         with:
-          name: vkd3d-standard
+          name: VKD3D-Standard
           path: '*.wcp'
 
 
   # ==================================================================
-  # JOB 2: ARM OPTIMIZED (ARIHANY MIMIC)
+  # JOB 2: ARM OPTIMIZED (vk3dk-Arm64ec)
   # ==================================================================
   build-arm-optimized:
     runs-on: ubuntu-latest
@@ -144,7 +146,6 @@ jobs:
           windres = 'arm64ec-w64-mingw32-windres'
           widl = 'arm64ec-w64-mingw32-widl'
           [built-in options]
-          # Static Link Fixes the Selection Revert
           c_link_args = ['-static', '-static-libgcc', '-static-libstdc++']
           cpp_link_args = ['-static', '-static-libgcc', '-static-libstdc++']
           [host_machine]
@@ -161,7 +162,7 @@ jobs:
         run: |
           cd src
           COMMIT_HASH=$(git rev-parse --short HEAD)
-          echo "VERSION_NAME=3.0b-ARM-${COMMIT_HASH}" >> $GITHUB_ENV
+          echo "VERSION_NAME=3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
 
       - name: Binary Patch (Arihany 0xAA64 Spoof)
         run: |
@@ -169,16 +170,16 @@ jobs:
              python3 -c "import sys; f=open(sys.argv[1], 'r+b'); f.seek(0x3C); pe=int.from_bytes(f.read(4), 'little'); f.seek(pe+4); f.write(b'\x64\xaa'); f.close()" "$dll"
           done
 
-      - name: Package ARM Optimized
+      - name: Package Optimized
         run: |
           mkdir -p pkg_arm/system32
           cp src/stage/bin/*.dll pkg_arm/system32/
-          # Minimum JSON structure to pass Ludashi's recognition check
-          echo "{\"type\": \"VKD3D\", \"versionName\": \"${{ env.VERSION_NAME }}\", \"versionCode\": 0, \"files\": [{\"source\": \"system32/d3d12.dll\", \"target\": \"\${system32}/d3d12.dll\"}, {\"source\": \"system32/d3d12core.dll\", \"target\": \"\${system32}/d3d12core.dll\"}]}" > pkg_arm/profile.json
-          cd pkg_arm && tar -cJf ../VKD3D-ARM-Arihany-${{ env.VERSION_NAME }}.wcp *
+          # Strict JSON formatting fix
+          echo "{\"type\": \"VKD3D\", \"versionName\": \"${{ env.VERSION_NAME }}\", \"versionCode\": 0, \"description\": \"vkd3d-proton FEX Optimized\", \"files\": [{\"source\": \"system32/d3d12.dll\", \"target\": \"\${system32}/d3d12.dll\"}, {\"source\": \"system32/d3d12core.dll\", \"target\": \"\${system32}/d3d12core.dll\"}]}" > pkg_arm/profile.json
+          cd pkg_arm && tar -cJf ../vk3dk-Arm64ec.wcp *
 
       - name: Upload ARM Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: vkd3d-arm-arihany
+          name: vk3dk-Arm64ec
           path: '*.wcp'
