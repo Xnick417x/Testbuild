@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Arihany Absolute Replica)
+name: Build VKD3D-Proton (Arihany Exact + Selection Fix)
 
 on:
   workflow_dispatch:
@@ -19,7 +19,6 @@ jobs:
             ca-certificates curl xz-utils jq git glslang-tools \
             build-essential python3 python3-pip pkg-config \
             meson ninja-build zstd
-
       - name: Setup Toolchain
         run: |
           LLVM_MINGW_TAG="20251104"
@@ -29,7 +28,6 @@ jobs:
           sudo mkdir -p "$TOOLCHAIN_DIR"
           sudo tar -C "$TOOLCHAIN_DIR" --strip-components=1 -xJf llvm.tar.xz
           echo "$TOOLCHAIN_DIR/bin" >> $GITHUB_PATH
-
       - name: Checkout VKD3D
         uses: actions/checkout@v4
         with:
@@ -37,13 +35,11 @@ jobs:
           submodules: recursive
           fetch-depth: 0
           path: src
-
       - name: Generate Version Name
         run: |
           cd src
           COMMIT_HASH=$(git rev-parse --short HEAD)
           echo "VERSION_NAME=3.0b-${COMMIT_HASH}" >> $GITHUB_ENV
-
       - name: Build Standard
         run: |
           cat <<EOF > cross-x64.txt
@@ -62,7 +58,6 @@ jobs:
           cpu = 'x86_64'
           endian = 'little'
           EOF
-
           cat <<EOF > cross-x86.txt
           [binaries]
           c = '/opt/llvm-mingw/bin/i686-w64-mingw32-clang'
@@ -79,24 +74,20 @@ jobs:
           cpu = 'i686'
           endian = 'little'
           EOF
-
           cd src
           meson setup build-x64 --cross-file ../cross-x64.txt -Dbuildtype=release -Dstrip=true
           ninja -C build-x64
           meson setup build-x86 --cross-file ../cross-x86.txt -Dbuildtype=release -Dstrip=true
           ninja -C build-x86
-
       - name: Package Standard
         run: |
           rm -rf final_package
           mkdir -p final_package/system32
           mkdir -p final_package/syswow64
-          
           find src/build-x64 -name "d3d12.dll" -exec cp -L {} final_package/system32/ \;
           find src/build-x64 -name "d3d12core.dll" -exec cp -L {} final_package/system32/ \;
           find src/build-x86 -name "d3d12.dll" -exec cp -L {} final_package/syswow64/ \;
           find src/build-x86 -name "d3d12core.dll" -exec cp -L {} final_package/syswow64/ \;
-          
           cat <<EOF > final_package/profile.json
           {
             "type": "VKD3D",
@@ -111,21 +102,18 @@ jobs:
             ]
           }
           EOF
-          
           cd final_package
           tar -cJf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp *
-
       - name: Upload Standard Artifact
         uses: actions/upload-artifact@v4
         with:
           name: vkd3d-standard
           path: '*.wcp'
 
-
   # ==================================================================
-  # JOB 2: THE ARIHANY ARM64EC REPLICA (Source: her guts & setup files)
+  # JOB 2: ARIHANY ARM64EC REPLICA (UBUNTU 22.04 + STATIC LINK)
   # ==================================================================
-  build-arihany-arm64ec:
+  build-arm-arihany:
     runs-on: ubuntu-22.04
     steps:
       - name: Install Dependencies
@@ -137,48 +125,34 @@ jobs:
             pkg-config cmake ninja-build zstd dos2unix perl tar unzip \
             llvm crossbuild-essential-arm64
 
-      - name: Setup Build Env (Replica of setup-llvm-meson.sh)
+      - [cite_start]name: Setup Build Env (setup-llvm-meson.sh) [cite: 20]
         run: |
-          # 1. Meson/Ninja Venv
           python3 -m venv .venv
-          .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1"
+          [cite_start].venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1" [cite: 20]
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
           
-          # 2. Toolchain Downgrade (Replica of setup-llvm.sh)
           LLVM_TAG="20251104"
           TOOLCHAIN="/opt/llvm-mingw"
-          wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_TAG/llvm-mingw-$LLVM_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
-          sudo rm -rf "$TOOLCHAIN" && sudo mkdir -p "$TOOLCHAIN"
-          sudo tar -C "$TOOLCHAIN" --strip-components=1 -xJf llvm.tar.xz
+          [cite_start]wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_TAG/llvm-mingw-$LLVM_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz [cite: 20]
+          [cite_start]sudo rm -rf "$TOOLCHAIN" && sudo mkdir -p "$TOOLCHAIN" [cite: 21]
+          [cite_start]sudo tar -C "$TOOLCHAIN" --strip-components=1 -xJf llvm.tar.xz [cite: 21]
           echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
-
-      - name: Install SPIRV-Headers (Replica of setup-llvm-meson.sh loop)
-        run: |
-          SPV_TMP="$(mktemp -d)"
-          git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers.git "$SPV_TMP"
-          for trip in x86_64-w64-mingw32 i686-w64-mingw32; do
-            if [ -d "/opt/llvm-mingw/$trip/include" ]; then
-              sudo mkdir -p "/opt/llvm-mingw/$trip/include/spirv"
-              sudo cp -r "$SPV_TMP/include/spirv/"* "/opt/llvm-mingw/$trip/include/spirv/"
-            fi
-          done
 
       - name: Checkout Source
         uses: actions/checkout@v4
         with:
           repository: HansKristian-Work/vkd3d-proton
-          submodules: recursive
+          [cite_start]submodules: recursive [cite: 25]
           path: src
 
       - name: Generate Version Info
         run: |
           cd src
-          COMMIT_HASH=$(git rev-parse --short HEAD)
+          [cite_start]COMMIT_HASH=$(git rev-parse --short HEAD) [cite: 26]
           echo "VERSION_NAME=3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
 
-      - name: Build (Replica of guts-arm64ec.sh + arm64ec.meson.ini)
+      - name: Build (ARM64EC + x86 STATIC)
         run: |
-          # 1. ARM64EC Cross File (Exact Replica of arm64ec.meson.ini.txt)
           cat <<EOF > arm64ec.ini
           [binaries]
           c       = 'arm64ec-w64-mingw32-gcc'
@@ -187,6 +161,10 @@ jobs:
           windres = 'arm64ec-w64-mingw32-windres'
           widl    = 'arm64ec-w64-mingw32-widl'
           strip   = 'llvm-strip'
+          [built-in options]
+          # STATIC LINKING: Prevents the selection revert
+          c_link_args = ['-static', '-static-libgcc', '-static-libstdc++']
+          cpp_link_args = ['-static', '-static-libgcc', '-static-libstdc++']
           [host_machine]
           system     = 'windows'
           cpu_family = 'aarch64'
@@ -194,7 +172,6 @@ jobs:
           endian     = 'little'
           EOF
 
-          # 2. x86 Cross File
           cat <<EOF > win32.ini
           [binaries]
           c = 'i686-w64-mingw32-gcc'
@@ -203,6 +180,9 @@ jobs:
           strip = 'llvm-strip'
           windres = 'i686-w64-mingw32-windres'
           widl = 'i686-w64-mingw32-widl'
+          [built-in options]
+          c_link_args = ['-static', '-static-libgcc', '-static-libstdc++']
+          cpp_link_args = ['-static', '-static-libgcc', '-static-libstdc++']
           [host_machine]
           system = 'windows'
           cpu_family = 'x86'
@@ -211,28 +191,22 @@ jobs:
           EOF
 
           cd src
-          # Compiling x86 (Replica of guts-arm64ec.sh)
           meson setup build_x86 --cross-file ../win32.ini --buildtype release --prefix "$PWD/stage/x32"
           ninja -C build_x86 install
           
-          # Compiling ARM64EC (Replica of guts-arm64ec.sh)
           meson setup build_ec --cross-file ../arm64ec.ini --buildtype release --prefix "$PWD/stage/ec"
           ninja -C build_ec install
 
-      - name: Package (Replica of vkd3d-proton-arm64ec.sh paths)
+      - name: Package (Arihany Numeric Packing)
         run: |
-          rm -rf pkg_wcp && mkdir -p pkg_wcp/system32 pkg_wcp/syswow64
+          [cite_start]rm -rf pkg_wcp && mkdir -p pkg_wcp/system32 pkg_wcp/syswow64 [cite: 37]
+          [cite_start]cp -L src/stage/ec/bin/*.dll pkg_wcp/system32/ [cite: 37]
+          [cite_start]cp -L src/stage/x32/bin/*.dll pkg_wcp/syswow64/ [cite: 37]
           
-          # Copying per guts-arm64ec.sh logic
-          cp -L src/stage/ec/bin/*.dll pkg_wcp/system32/
-          cp -L src/stage/x32/bin/*.dll pkg_wcp/syswow64/
-          
-          # Manual Strip (Arihany's exact command)
-          /opt/llvm-mingw/bin/llvm-strip --strip-all pkg_wcp/system32/*.dll
-          /opt/llvm-mingw/bin/llvm-strip --strip-all pkg_wcp/syswow64/*.dll
+          [cite_start]/opt/llvm-mingw/bin/llvm-strip --strip-all pkg_wcp/system32/*.dll [cite: 37]
+          [cite_start]/opt/llvm-mingw/bin/llvm-strip --strip-all pkg_wcp/syswow64/*.dll [cite: 37]
 
-          # JSON Generation (Dynamic jq logic from guts-arm64ec.sh context)
-          echo "{}" > pkg_wcp/profile.json
+          [cite_start]echo "{}" > pkg_wcp/profile.json [cite: 38]
           jq -n --arg vn "${{ env.VERSION_NAME }}" \
             '{
               type: "VKD3D",
@@ -240,22 +214,21 @@ jobs:
               versionCode: 0,
               description: ("vkd3d-proton ARM64EC " + $vn),
               files: []
-            }' > pkg_wcp/profile.json
+            [cite_start]}' > pkg_wcp/profile.json [cite: 38]
 
-          for f in pkg_wcp/system32/*.dll pkg_wcp/syswow64/*.dll; do
-              [ -e "$f" ] || continue
+          [cite_start]for f in pkg_wcp/system32/*.dll pkg_wcp/syswow64/*.dll; do [cite: 39]
+              [cite_start][ -e "$f" ] || continue [cite: 41]
               REL_PATH=${f#pkg_wcp/}
               FOLDER=$(dirname "$REL_PATH")
-              if [[ "$FOLDER" == "system32" ]]; then TARGET="\${system32}"; else TARGET="\${syswow64}"; fi
+              [cite_start]if [[ "$FOLDER" == "system32" ]]; then TARGET="\${system32}"; else TARGET="\${syswow64}"; fi [cite: 42]
               jq --arg src "$REL_PATH" --arg tgt "$TARGET/$(basename "$f")" \
                  '.files += [{"source": $src, "target": $tgt}]' \
-                 pkg_wcp/profile.json > pkg_wcp/tmp.json && mv pkg_wcp/tmp.json pkg_wcp/profile.json
+                 [cite_start]pkg_wcp/profile.json > pkg_wcp/tmp.json && mv pkg_wcp/tmp.json pkg_wcp/profile.json [cite: 42]
           done
 
-          # Packing with ZSTD + Numeric Owner (Arihany Packing Trick)
-          chmod -R 777 pkg_wcp
+          [cite_start]chmod -R 777 pkg_wcp [cite: 43]
           cd pkg_wcp
-          tar --zstd --format=gnu --owner=0 --group=0 --numeric-owner -cf ../vk3dk-Arm64ec.wcp *
+          [cite_start]tar --zstd --format=gnu --owner=0 --group=0 --numeric-owner -cf ../vk3dk-Arm64ec.wcp * [cite: 43]
 
       - name: Upload ARM Artifact
         uses: actions/upload-artifact@v4
