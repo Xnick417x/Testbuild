@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Standard + FEX Static)
+name: Build VKD3D-Proton (Standard + Arihany ARM Fix)
 
 on:
   workflow_dispatch:
@@ -113,24 +113,23 @@ jobs:
           EOF
           
           cd final_package
-          tar -cJf ../VKD3D-Proton-Standard-${{ env.VERSION_NAME }}.wcp *
+          tar -cJf ../VKD3D-Standard-${{ env.VERSION_NAME }}.wcp *
 
-      - name: Upload Standard Artifact
+      - name: Upload Standard
         uses: actions/upload-artifact@v4
         with:
           name: vkd3d-standard
           path: '*.wcp'
 
-
   # ==================================================================
-  # JOB 2: FEX OPTIMIZED BUILD (Static + Spoofed)
+  # JOB 2: ARIHANY ARM OPTIMIZED (FOR LUDASHI)
   # ==================================================================
-  build-fex-optimized:
+  build-arm-optimized:
     runs-on: ubuntu-latest
     container:
       image: archlinux:latest
     steps:
-      - name: Install Dependencies (Arch)
+      - name: Install Dependencies
         run: |
           pacman -Sy --noconfirm git base-devel glslang python python-pip cmake ninja jq wget tar zstd llvm
 
@@ -141,17 +140,15 @@ jobs:
           submodules: recursive
           path: src
 
-      - name: Setup Toolchain (Arihany's 20251104)
+      - name: Setup Toolchain (Arihany 20251104)
         run: |
           python -m venv .venv
           .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1"
-          
           LLVM_TAG="20251104"
           TOOLCHAIN="/opt/llvm-mingw"
           mkdir -p "$TOOLCHAIN"
           wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_TAG/llvm-mingw-$LLVM_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
           tar -C "$TOOLCHAIN" --strip-components=1 -xJf llvm.tar.xz
-          
           echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
 
@@ -159,8 +156,6 @@ jobs:
         run: |
           SPV_TMP="$(mktemp -d)"
           git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers.git "$SPV_TMP"
-          
-          # Install to ALL paths
           for trip in x86_64-w64-mingw32 i686-w64-mingw32 arm64ec-w64-mingw32; do
             if [ -d "/opt/llvm-mingw/$trip/include" ]; then
               mkdir -p "/opt/llvm-mingw/$trip/include/spirv"
@@ -173,22 +168,21 @@ jobs:
           cd src
           git config --global --add safe.directory '*'
           COMMIT_HASH=$(git rev-parse --short HEAD)
-          echo "VERSION_NAME=3.0b-FEX-${COMMIT_HASH}" >> $GITHUB_ENV
+          echo "VERSION_NAME=3.0b-ARM-${COMMIT_HASH}" >> $GITHUB_ENV
 
-      - name: Build & Stage (Static + EC)
+      - name: Build & Stage (Static Link + GCC Wrapper)
         run: |
-          # 1. ARM64EC (Static Link)
-          cat <<EOF > arm64ec.ini
+          cat <<EOF > arm_variant.ini
           [binaries]
           c = 'arm64ec-w64-mingw32-gcc'
           cpp = 'arm64ec-w64-mingw32-g++'
           ar = 'arm64ec-w64-mingw32-ar'
-          strip = 'llvm-strip'
+          strip = '/opt/llvm-mingw/bin/llvm-strip'
           windres = 'arm64ec-w64-mingw32-windres'
           widl = 'arm64ec-w64-mingw32-widl'
           
           [built-in options]
-          # THE FIX: Static linking prevents dependency crashes (Ghost Revert)
+          # Static Link Fix to prevent "Revert to None" crash
           c_link_args = ['-static', '-static-libgcc', '-static-libstdc++']
           cpp_link_args = ['-static', '-static-libgcc', '-static-libstdc++']
           
@@ -199,92 +193,45 @@ jobs:
           endian = 'little'
           EOF
 
-          # 2. X86 (Static Link)
-          cat <<EOF > x86.ini
-          [binaries]
-          c = 'i686-w64-mingw32-gcc'
-          cpp = 'i686-w64-mingw32-g++'
-          ar = 'llvm-ar'
-          strip = 'llvm-strip'
-          windres = 'i686-w64-mingw32-windres'
-          widl = 'i686-w64-mingw32-widl'
-          
-          [built-in options]
-          c_link_args = ['-static', '-static-libgcc', '-static-libstdc++']
-          cpp_link_args = ['-static', '-static-libgcc', '-static-libstdc++']
-
-          [host_machine]
-          system = 'windows'
-          cpu_family = 'x86'
-          cpu = 'i686'
-          endian = 'little'
-          EOF
-
           cd src
-          # Build EC (Don't strip yet, we do it cleanly later)
-          meson setup build_ec --cross-file ../arm64ec.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=false
-          ninja -C build_ec install
-          
-          # Build X86
-          meson setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86" -Dstrip=true
-          ninja -C build_x86 install
+          meson setup build_arm --cross-file ../arm_variant.ini --buildtype release --prefix "$PWD/stage/arm" -Dstrip=true
+          ninja -C build_arm install
 
-      - name: Strip & Spoof (The FEX Magic)
+      - name: Binary Patch (0xAA64 Spoof)
         run: |
-          rm -rf final_package
-          mkdir -p final_package/system32 final_package/syswow64
+          rm -rf pkg_arm
+          mkdir -p pkg_arm/system32
+          cp -L src/stage/arm/bin/*.dll pkg_arm/system32/
           
-          cp -L src/stage/ec/bin/*.dll final_package/system32/
-          cp -L src/stage/x86/bin/*.dll final_package/syswow64/
-          
-          echo "=========================================="
-          echo " 1. Stripping Binaries..."
-          /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/*.dll
-          
-          echo " 2. Spoofing Header to 0xAA64 (Native AArch64)..."
-          # This forces the binary to report as AArch64 so FEX/Winlator loads it natively
-          for dll in final_package/system32/*.dll; do
-             python3 -c "
-          import sys
-          with open('$dll', 'r+b') as f:
-              f.seek(0x3C)
-              pe_offset = int.from_bytes(f.read(4), 'little')
-              f.seek(pe_offset + 4)
-              f.write(b'\x64\xaa')
-          print(f'Patched {dll} -> 0xAA64')
-          "
+          # This Python script fix addresses the variable definition error
+          for dll in pkg_arm/system32/*.dll; do
+             python3 -c "import sys; f=open(sys.argv[1], 'r+b'); f.seek(0x3C); pe=int.from_bytes(f.read(4), 'little'); f.seek(pe+4); f.write(b'\x64\xaa'); f.close()" \"$dll\"
           done
-          echo "=========================================="
 
-      - name: Package Final
+      - name: Package Optimized
         run: |
-          echo "{}" > final_package/profile.json
-          jq -n \
-            --arg vn "${{ env.VERSION_NAME }}" \
+          echo "{}" > pkg_arm/profile.json
+          jq -n --arg vn "${{ env.VERSION_NAME }}" \
             '{
               type: "VKD3D",
-              versionName: $vn,
+              versionName: ("VKD3D-ARM-FEX " + $vn),
               versionCode: 0,
-              description: ("VKD3D-Proton FEX Optimized (Static)"),
+              description: "Optimized for Ludashi FEX (Static/AArch64 Spoof)",
               files: []
-            }' > final_package/profile.json
+            }' > pkg_arm/profile.json
 
-          for f in final_package/system32/*.dll final_package/syswow64/*.dll; do
-              [ -e "$f" ] || continue
-              REL_PATH=${f#final_package/}
-              FOLDER=$(dirname "$REL_PATH")
-              if [[ "$FOLDER" == "system32" ]]; then TARGET="\${system32}"; else TARGET="\${syswow64}"; fi
-              jq --arg src "$REL_PATH" --arg tgt "$TARGET/$(basename "$f")" \
+          for f in pkg_arm/system32/*.dll; do
+              REL_PATH=${f#pkg_arm/}
+              jq --arg src "$REL_PATH" --arg tgt "\${system32}/$(basename "$f")" \
                  '.files += [{"source": $src, "target": $tgt}]' \
-                 final_package/profile.json > final_package/tmp.json && mv final_package/tmp.json final_package/profile.json
+                 pkg_arm/profile.json > pkg_arm/tmp.json && mv pkg_arm/tmp.json pkg_arm/profile.json
           done
+          
+          cd pkg_arm
+          tar -cJf ../VKD3D-ARM-Optimized.wcp *
 
-          chmod -R 777 final_package
-          cd final_package
-          tar --zstd --format=gnu --owner=0 --group=0 --numeric-owner -cf ../VKD3D-Proton-FEX-Optimized.wcp *
-
-      - name: Upload FEX Artifact
+      - name: Upload ARM Optimized
         uses: actions/upload-artifact@v4
         with:
-          name: vkd3d-fex-optimized
+          name: vkd3d-arm-optimized
           path: '*.wcp'
