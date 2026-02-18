@@ -23,7 +23,7 @@ These builds are automatically checked and generated every night at **9:00 PM CS
 
 | Component | Download | History |
 | :--- | :--- | :--- |
-| **DXVK** (GPLAsync) | [**Download Latest**](#) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=dxvk-nightly&expanded=true) |
+| **DXVK** (GPLAsync) | [**Download Latest**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/dxvk-nightly-d222d2c3/dxvk-gplasync-d222d2c3.wcp) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=dxvk-nightly&expanded=true) |
 | **VKD3D-Proton** (Standard) | [**Download Latest**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/vk3dk-nightly-d6ac0aec/Vk3dk-Standard-3.0b-d6ac0aec.wcp) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=vk3dk-nightly+NOT+arm64ec&expanded=true) |
 | **VKD3D-Proton** (ARM64EC) | [**Download Latest**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/vk3dk-arm64ec-nightly-d6ac0aec/Vk3dk-Arm64ec-3.0b-arm64ec-d6ac0aec.wcp) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=vk3dk-arm64ec-nightly&expanded=true) |
 | **FEXCore** (ARM64EC) | [**Download Latest**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/fex-nightly-2601-49a37c7d6/FEXCore-2601-49a37c7d6.wcp) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=fex-nightly&expanded=true) |
