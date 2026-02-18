@@ -169,6 +169,27 @@ jobs:
           | tail -n +9 \
           | xargs -I {} sh -c 'gh release delete "{}" --cleanup-tag -y'
 
+      - name: Update Dashboard (Standard)
+        if: env.SHOULD_BUILD == 'true'
+        uses: actions/checkout@v4
+        with:
+          path: dashboard
+
+      - name: Push README Updates (Standard)
+        if: env.SHOULD_BUILD == 'true'
+        run: |
+          cd dashboard
+          
+          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/vk3dk-nightly-${{ env.COMMIT_HASH }}/Vk3dk-Standard-${{ env.VERSION_NAME }}.wcp"
+          
+          sed -i "s|\(| \*\*VKD3D-Proton\*\* | \`Standard\`.*\[\*\*Download Latest\*\*\]\)([^)]*)|\1($DOWNLOAD_URL)|" README.md
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git commit -m "Update dashboard for Vk3dk Standard ${{ env.COMMIT_HASH }}"
+          git push
+
   build-arm64ec:
     runs-on: ubuntu-24.04
     steps:
@@ -352,3 +373,24 @@ jobs:
           gh release list --limit 100 --json tagName,createdAt --jq 'sort_by(.createdAt) | reverse | .[].tagName | select(startswith("vk3dk-arm64ec-nightly-"))' \
           | tail -n +9 \
           | xargs -I {} sh -c 'gh release delete "{}" --cleanup-tag -y'
+
+      - name: Update Dashboard (ARM64EC)
+        if: env.SHOULD_BUILD == 'true'
+        uses: actions/checkout@v4
+        with:
+          path: dashboard
+
+      - name: Push README Updates (ARM64EC)
+        if: env.SHOULD_BUILD == 'true'
+        run: |
+          cd dashboard
+          
+          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/vk3dk-arm64ec-nightly-${{ env.COMMIT_HASH }}/Vk3dk-Arm64ec-${{ env.VERSION_NAME }}.wcp"
+          
+          sed -i "s|\(| \*\*VKD3D-Proton\*\* | \`ARM64EC\`.*\[\*\*Download Latest\*\*\]\)([^)]*)|\1($DOWNLOAD_URL)|" README.md
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git commit -m "Update dashboard for Vk3dk ARM64EC ${{ env.COMMIT_HASH }}"
+          git push
