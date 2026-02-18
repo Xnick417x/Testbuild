@@ -2,8 +2,12 @@ name: Build Dxvk Nightly
 
 on:
   schedule:
-    - cron: '0 0 * * *'
+    # 9:00 PM CST = 03:00 UTC
+    - cron: '0 3 * * *'
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -18,23 +22,40 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
+    - name: Check for Updates
+      id: check
+      run: |
+        cd dxvk
+        # Check if there are any commits in the last 26 hours (buffer for run time)
+        if [ -z "$(git log --since='26 hours ago' --pretty=format:'%H')" ]; then
+          echo "No new commits in the last 26 hours."
+          echo "SHOULD_BUILD=false" >> $GITHUB_ENV
+        else
+          echo "New commits found. Proceeding with build."
+          echo "SHOULD_BUILD=true" >> $GITHUB_ENV
+        fi
+
     - name: Install Dependencies
+      if: env.SHOULD_BUILD == 'true'
       run: |
         sudo apt-get update
         sudo apt-get install -y meson ninja-build mingw-w64 glslang-tools wine
 
     - name: Download and Apply Patch
+      if: env.SHOULD_BUILD == 'true'
       run: |
         cd dxvk
         wget https://gitlab.com/Ph42oN/dxvk-gplasync/-/raw/main/patches/dxvk-gplasync-master.patch
         git apply dxvk-gplasync-master.patch
 
     - name: Build DXVK
+      if: env.SHOULD_BUILD == 'true'
       run: |
         cd dxvk
         ./package-release.sh master ../dxvk-built --no-package
 
     - name: Prepare Package
+      if: env.SHOULD_BUILD == 'true'
       run: |
         cd dxvk
         COMMIT_HASH=$(git rev-parse --short HEAD)
@@ -65,14 +86,28 @@ jobs:
         EOF
 
     - name: Create WCP Package
+      if: env.SHOULD_BUILD == 'true'
       run: |
         cd dxvk
         COMMIT_HASH=$(git rev-parse --short HEAD)
+        echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
         cd ..
         tar -cJf dxvk-gplasync-${COMMIT_HASH}.wcp -C packaging .
 
-    - name: Upload Artifacts
-      uses: actions/upload-artifact@v4
+    - name: Create Release
+      if: env.SHOULD_BUILD == 'true'
+      uses: softprops/action-gh-release@v1
       with:
-        name: dxvk-nightly-build
-        path: '*.wcp'
+        tag_name: nightly-${{ env.COMMIT_HASH }}
+        files: '*.wcp'
+        name: "DXVK Nightly ${{ env.COMMIT_HASH }}"
+        body: "Automated nightly build of DXVK (GPLAsync) - Commit ${{ env.COMMIT_HASH }}"
+
+    - name: Delete Older Releases
+      if: env.SHOULD_BUILD == 'true'
+      uses: dev-drprasad/delete-older-releases@v0.3.4
+      with:
+        keep_latest: 8
+        delete_tags: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
