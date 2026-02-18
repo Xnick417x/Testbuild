@@ -1,3 +1,4 @@
+
 name: Build FexCore Nightly
 
 on:
@@ -193,11 +194,8 @@ jobs:
       if: env.SHOULD_BUILD == 'true'
       run: |
         cd dashboard
-        
         DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/fex-nightly-${{ env.VERSION_NAME }}/FEXCore-${{ env.VERSION_NAME }}.wcp"
-        
-        sed -i "s|\(| \*\*FEXCore\*\*.*\[\*\*Download Latest\*\*\]\)([^)]*)|\1($DOWNLOAD_URL)|" README.md
-        
+        sed -i "/\*\*FEXCore\*\* (ARM64EC)/ s|\[\*\*Download Latest\*\*\]([^)]*)|[**Download Latest**]($DOWNLOAD_URL)|" README.md
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
         git add README.md
