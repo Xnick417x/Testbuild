@@ -193,11 +193,21 @@ jobs:
       if: env.SHOULD_BUILD == 'true'
       run: |
         cd dashboard
-        DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/fex-nightly-${{ env.VERSION_NAME }}/FEXCore-${{ env.VERSION_NAME }}.wcp"
-        sed -i "/\*\*FEXCore\*\* (ARM64EC)/ s|\[\*\*Download Latest\*\*\]([^)]*)|[**Download Latest**]($DOWNLOAD_URL)|" README.md
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git add README.md
-        git commit -m "Update dashboard for FEXCore ${{ env.VERSION_NAME }}"
-        git pull --rebase origin main
-        git push
+        
+        DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/fex-nightly-${{ env.VERSION_NAME }}/FEXCore-${{ env.VERSION_NAME }}.wcp"
+        
+        n=0
+        until [ "$n" -ge 5 ]
+        do
+           git fetch origin main
+           git reset --hard origin/main
+           sed -i "/\*\*FEXCore\*\* (ARM64EC)/ s|\[\*\*Download Latest\*\*\]([^)]*)|[**Download Latest**]($DOWNLOAD_URL)|" README.md
+           git add README.md
+           git commit -m "Update dashboard for FEXCore ${{ env.VERSION_NAME }}"
+           if git push origin main; then exit 0; fi
+           n=$((n+1))
+           sleep 15
+        done
+        exit 1
