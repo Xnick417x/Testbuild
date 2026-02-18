@@ -2,8 +2,11 @@ name: Build Box64 & WOWBox64 Nightly
 
 on:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 3 * * *'
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build-android-native:
@@ -12,23 +15,41 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          repository: ptitSeb/box64
+          path: source
+          fetch-depth: 0
+
+      - name: Check for Updates
+        id: check
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "SHOULD_BUILD=true" >> $GITHUB_ENV
+          else
+            cd source
+            if [ -z "$(git log --since='26 hours ago' --pretty=format:'%H')" ]; then
+              echo "SHOULD_BUILD=false" >> $GITHUB_ENV
+            else
+              echo "SHOULD_BUILD=true" >> $GITHUB_ENV
+            fi
+          fi
 
       - name: Install Dependencies
+        if: env.SHOULD_BUILD == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y git cmake make python3 p7zip-full wget tar file
 
       - name: Setup Android NDK
+        if: env.SHOULD_BUILD == 'true'
         run: |
           wget -q https://dl.google.com/android/repository/android-ndk-r26b-linux.zip
           unzip -q android-ndk-r26b-linux.zip
           echo "ANDROID_NDK_HOME=$PWD/android-ndk-r26b" >> $GITHUB_ENV
           echo "BOX64_COMPILER=$PWD/android-ndk-r26b/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android28-clang" >> $GITHUB_ENV
 
-      - name: Clone Box64
-        run: git clone https://github.com/ptitSeb/box64 source
-
       - name: Get Version Info
+        if: env.SHOULD_BUILD == 'true'
         run: |
           cd source
           MAJOR=$(grep '#define BOX64_MAJOR' src/box64version.h | awk '{print $3}')
@@ -37,8 +58,10 @@ jobs:
           VERSION="$MAJOR.$MINOR.$REVISION"
           COMMIT=$(git rev-parse --short HEAD)
           echo "FULL_VERSION=${VERSION}-${COMMIT}-nightly" >> $GITHUB_ENV
+          echo "COMMIT_HASH=${COMMIT}" >> $GITHUB_ENV
 
       - name: Configure and Build
+        if: env.SHOULD_BUILD == 'true'
         run: |
           mkdir build
           cd build
@@ -52,18 +75,40 @@ jobs:
           ${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip box64
 
       - name: Package
+        if: env.SHOULD_BUILD == 'true'
         run: |
           cd build
-          # Removed Author reference, kept strictly the dynamic FULL_VERSION
           echo '{"type": "Box64", "versionName": "${{ env.FULL_VERSION }}", "versionCode": 0, "description": "Box64-${{ env.FULL_VERSION }}", "files": [{"source": "box64", "target": "${bindir}/box64"}]}' > profile.json
           tar -cJf "box64-${{ env.FULL_VERSION }}.wcp" box64 profile.json
 
       - name: Upload Artifact
+        if: env.SHOULD_BUILD == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: Box64-Nightly
           path: build/box64-*.wcp
           compression-level: 0
+
+      - name: Create Release (Box64)
+        if: env.SHOULD_BUILD == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: box64-nightly-${{ env.COMMIT_HASH }}
+          files: build/box64-*.wcp
+          name: "Box64 Nightly ${{ env.COMMIT_HASH }}"
+          body: |
+            Automated nightly build of Box64 (Android Native).
+            
+            Commit: https://github.com/ptitSeb/box64/commit/${{ env.COMMIT_HASH }}
+
+      - name: Cleanup Old Releases (Box64)
+        if: env.SHOULD_BUILD == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release list --limit 100 --json tagName,createdAt --jq 'sort_by(.createdAt) | reverse | .[].tagName | select(startswith("box64-nightly-"))' \
+          | tail -n +9 \
+          | xargs -I {} sh -c 'gh release delete "{}" --cleanup-tag -y'
 
   build-wowbox64:
     name: Build WOWBox64 (MinGW)
@@ -71,13 +116,33 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          repository: ptitSeb/box64
+          path: source
+          fetch-depth: 0
+
+      - name: Check for Updates
+        id: check
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "SHOULD_BUILD=true" >> $GITHUB_ENV
+          else
+            cd source
+            if [ -z "$(git log --since='26 hours ago' --pretty=format:'%H')" ]; then
+              echo "SHOULD_BUILD=false" >> $GITHUB_ENV
+            else
+              echo "SHOULD_BUILD=true" >> $GITHUB_ENV
+            fi
+          fi
 
       - name: Install Dependencies
+        if: env.SHOULD_BUILD == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y git cmake make python3 wget tar
 
       - name: Setup Toolchain
+        if: env.SHOULD_BUILD == 'true'
         run: |
           LLVM_MINGW_VERSION=20240619
           wget -q https://github.com/mstorsjo/llvm-mingw/releases/download/${LLVM_MINGW_VERSION}/llvm-mingw-${LLVM_MINGW_VERSION}-ucrt-ubuntu-20.04-x86_64.tar.xz
@@ -85,12 +150,13 @@ jobs:
           echo "MINGW_PATH=$PWD/$(ls -d llvm-mingw-* | head -n 1)/bin" >> $GITHUB_ENV
 
       - name: Clone and Patch
+        if: env.SHOULD_BUILD == 'true'
         run: |
-          git clone https://github.com/ptitSeb/box64 source
           cd source
           echo -e '\nint __mingw_vsprintf(char* buffer, const char* format, va_list args) { return vsprintf(buffer, format, args); }' >> wine/common/crt.c
 
       - name: Get Version Info
+        if: env.SHOULD_BUILD == 'true'
         run: |
           cd source
           MAJOR=$(grep '#define BOX64_MAJOR' src/box64version.h | awk '{print $3}')
@@ -99,8 +165,10 @@ jobs:
           VERSION="$MAJOR.$MINOR.$REVISION"
           COMMIT=$(git rev-parse --short HEAD)
           echo "FULL_VERSION=${VERSION}-${COMMIT}-nightly" >> $GITHUB_ENV
+          echo "COMMIT_HASH=${COMMIT}" >> $GITHUB_ENV
 
       - name: Configure and Build
+        if: env.SHOULD_BUILD == 'true'
         run: |
           export PATH=$PATH:${{ env.MINGW_PATH }}
           mkdir build
@@ -113,16 +181,38 @@ jobs:
           make -j$(nproc) wowbox64
 
       - name: Package
+        if: env.SHOULD_BUILD == 'true'
         run: |
           cd build/wowbox64-prefix/src/wowbox64-build
-          # Removed Author reference here as well
           echo '{"type": "WOWBox64", "versionName": "${{ env.FULL_VERSION }}", "versionCode": 0, "description": "WOWBox64-${{ env.FULL_VERSION }}", "files": [{"source": "system32/wowbox64.dll", "target": "${system32}/wowbox64.dll"}]}' > profile.json
           mkdir -p system32 && cp wowbox64.dll system32/
           tar -cJf "WOWBox64-${{ env.FULL_VERSION }}.wcp" system32 profile.json
 
       - name: Upload Artifact
+        if: env.SHOULD_BUILD == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: WOWBox64-Nightly
           path: build/wowbox64-prefix/src/wowbox64-build/WOWBox64-*.wcp
           compression-level: 0
+
+      - name: Create Release (WOWBox64)
+        if: env.SHOULD_BUILD == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: wowbox64-nightly-${{ env.COMMIT_HASH }}
+          files: build/wowbox64-prefix/src/wowbox64-build/WOWBox64-*.wcp
+          name: "WOWBox64 Nightly ${{ env.COMMIT_HASH }}"
+          body: |
+            Automated nightly build of WOWBox64 (MinGW).
+            
+            Commit: https://github.com/ptitSeb/box64/commit/${{ env.COMMIT_HASH }}
+
+      - name: Cleanup Old Releases (WOWBox64)
+        if: env.SHOULD_BUILD == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release list --limit 100 --json tagName,createdAt --jq 'sort_by(.createdAt) | reverse | .[].tagName | select(startswith("wowbox64-nightly-"))' \
+          | tail -n +9 \
+          | xargs -I {} sh -c 'gh release delete "{}" --cleanup-tag -y'
