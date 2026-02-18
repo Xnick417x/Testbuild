@@ -1,16 +1,42 @@
 name: Build FexCore Nightly
 
 on:
-  workflow_dispatch:
   schedule:
-    - cron: "0 17 * * *"
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
+    - name: Checkout FEX
+      uses: actions/checkout@v4
+      with:
+        repository: FEX-Emu/FEX
+        submodules: recursive
+        fetch-depth: 0
+        path: src
+
+    - name: Check for Updates
+      id: check
+      run: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          echo "SHOULD_BUILD=true" >> $GITHUB_ENV
+        else
+          cd src
+          if [ -z "$(git log --since='26 hours ago' --pretty=format:'%H')" ]; then
+            echo "SHOULD_BUILD=false" >> $GITHUB_ENV
+          else
+            echo "SHOULD_BUILD=true" >> $GITHUB_ENV
+          fi
+        fi
+
     - name: Install Dependencies
+      if: env.SHOULD_BUILD == 'true'
       run: |
         sudo apt-get update -y
         sudo apt-get install -y --no-install-recommends \
@@ -20,6 +46,7 @@ jobs:
           llvm crossbuild-essential-arm64
 
     - name: Setup Toolchain
+      if: env.SHOULD_BUILD == 'true'
       run: |
         LLVM_MINGW_TAG="20251104"
         TOOLCHAIN_DIR="/opt/llvm-mingw"
@@ -32,35 +59,24 @@ jobs:
         
         echo "$TOOLCHAIN_DIR/bin" >> $GITHUB_PATH
 
-    - name: Checkout FEX
-      uses: actions/checkout@v4
-      with:
-        repository: FEX-Emu/FEX
-        submodules: recursive
-        fetch-depth: 0
-        path: src
-
     - name: Generate Version Name
+      if: env.SHOULD_BUILD == 'true'
       id: version
       run: |
         git config --global --add safe.directory '*'
         cd src
         git fetch --tags --force
         
-        # Get tag (e.g., FEX-2601)
         LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "Unknown")
-        
-        # CLEANUP: Remove "FEX-" prefix so it's just "2601"
         CLEAN_TAG=$(echo "$LATEST_TAG" | sed 's/^FEX-//')
-        
         COMMIT_HASH=$(git rev-parse --short HEAD)
         
-        # Format: 2601-7d6a2f1 (Matches the clean style you wanted)
         VERSION_NAME="${CLEAN_TAG}-${COMMIT_HASH}"
         
         echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
 
     - name: Build FEXCore
+      if: env.SHOULD_BUILD == 'true'
       run: |
         build_arch() {
           local triple="$1"
@@ -95,6 +111,7 @@ jobs:
         build_arch "aarch64" "../../stage-wo"
 
     - name: Package
+      if: env.SHOULD_BUILD == 'true'
       run: |
         rm -rf final_package
         mkdir -p final_package/system32
@@ -112,7 +129,6 @@ jobs:
             exit 1
         fi
         
-        # Clean JSON: No "Author", just clean version name
         cat <<EOF > final_package/profile.json
         {
           "type": "FEXCore",
@@ -133,12 +149,32 @@ jobs:
         EOF
 
     - name: Create WCP
+      if: env.SHOULD_BUILD == 'true'
       run: |
         cd final_package
         tar -cJf ../FEXCore-${{ env.VERSION_NAME }}.wcp .
 
     - name: Upload Artifact
+      if: env.SHOULD_BUILD == 'true'
       uses: actions/upload-artifact@v4
       with:
         name: fexcore-nightly
         path: '*.wcp'
+
+    - name: Create Release
+      if: env.SHOULD_BUILD == 'true'
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: fex-nightly-${{ env.VERSION_NAME }}
+        files: '*.wcp'
+        name: "FEXCore Nightly ${{ env.VERSION_NAME }}"
+        body: "Automated nightly build of FEXCore - ${{ env.VERSION_NAME }}"
+
+    - name: Cleanup Old Releases
+      if: env.SHOULD_BUILD == 'true'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh release list --limit 100 --json tagName,createdAt --jq 'sort_by(.createdAt) | reverse | .[].tagName | select(startswith("fex-nightly-"))' \
+        | tail -n +9 \
+        | xargs -I {} sh -c 'gh release delete "{}" --cleanup-tag -y'
