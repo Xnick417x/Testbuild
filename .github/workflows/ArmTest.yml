@@ -1,29 +1,21 @@
-name: Build VKD3D-Proton (ARM64EC Standalone)
+name: Build VKD3D-Proton (ARM64EC)
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 17 * * *"
 
 jobs:
-  build-arm64ec:
-    runs-on: ubuntu-latest
+  build-vkd3d-arm64ec:
+    runs-on: ubuntu-24.04
     steps:
-      - name: Install Dependencies
+      - name: Setup Environment
         run: |
-          sudo apt-get update -y
-          # Added 'unzip' and 'zstd' explicitly as seen in his script
+          sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            ca-certificates curl xz-utils jq git \
-            build-essential python3 python3-pip pkg-config \
-            meson ninja-build zstd wget unzip
+            ca-certificates curl xz-utils jq git python3 pkg-config \
+            zstd meson ninja-build wget unzip build-essential
 
-          python3 -m pip install --upgrade pip
-          python3 -m pip install meson
-
-      - name: Setup GLSLang (Critical Match)
+      - name: Setup GLSLang
         run: |
-          # He uses the master-tot release manually, so we do too.
           wget -q https://github.com/KhronosGroup/glslang/releases/download/master-tot/glslang-master-linux-Release.zip
           unzip -q glslang-master-linux-Release.zip -d glslang
           echo "$PWD/glslang/bin" >> $GITHUB_PATH
@@ -41,25 +33,15 @@ jobs:
           
           echo "$TOOLCHAIN_DIR/bin" >> $GITHUB_PATH
 
-      - name: Checkout VKD3D-Proton
-        uses: actions/checkout@v4
-        with:
-          repository: HansKristian-Work/vkd3d-proton
-          submodules: recursive
-          fetch-depth: 0
-          path: src
-
-      - name: Generate Version Info
-        id: version
+      - name: Build VKD3D
         run: |
+          git clone --recursive https://github.com/HansKristian-Work/vkd3d-proton src
           cd src
           COMMIT_HASH=$(git rev-parse --short HEAD)
-          VERSION_NAME="3.0b-ARM64EC-${COMMIT_HASH}"
+          VERSION_NAME="arm64ec-3.0b-${COMMIT_HASH}"
           echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
+          cd ..
 
-      - name: Build ARM64EC & x86
-        run: |
-          # 1. ARM64EC: Matches his 'arm64ec.txt' exactly (Clang, no extra static flags)
           cat <<EOF > arm64ec.txt
           [binaries]
           c = 'arm64ec-w64-mingw32-clang'
@@ -76,7 +58,6 @@ jobs:
           endian = 'little'
           EOF
 
-          # 2. x86: Matches his 'x86.txt' exactly (Clang, no extra static flags)
           cat <<EOF > x86.txt
           [binaries]
           c = 'i686-w64-mingw32-clang'
@@ -94,37 +75,30 @@ jobs:
           EOF
 
           cd src
-          
-          # He uses -Dstrip=true here, so we do too
           meson setup build-ec --cross-file ../arm64ec.txt -Dbuildtype=release -Dstrip=true
-          ninja -C build-ec
-
+          ninja -C build-ec -j 2
           meson setup build-x86 --cross-file ../x86.txt -Dbuildtype=release -Dstrip=true
-          ninja -C build-x86
-
-      - name: Package Artifacts
-        run: |
+          ninja -C build-x86 -j 2
+          
+          cd ..
           rm -rf final_package
           mkdir -p final_package/system32
           mkdir -p final_package/syswow64
-
-          # His script uses find -name "file" -exec cp ...
+          
           find src/build-ec -name "d3d12.dll" -exec cp -L {} final_package/system32/ \;
           find src/build-ec -name "d3d12core.dll" -exec cp -L {} final_package/system32/ \;
           find src/build-x86 -name "d3d12.dll" -exec cp -L {} final_package/syswow64/ \;
           find src/build-x86 -name "d3d12core.dll" -exec cp -L {} final_package/syswow64/ \;
-
-          # Explicit Strip (He does this manually at the end)
+          
           llvm-strip --strip-all final_package/system32/*.dll
           llvm-strip --strip-all final_package/syswow64/*.dll
 
-          # JSON: Matches his exactly (using env var for version)
           cat <<EOF > final_package/profile.json
           {
             "type": "VKD3D",
-            "versionName": "${{ env.VERSION_NAME }}",
-            "versionCode": 0,
-            "description": "Vk3dk-Proton ${{ env.VERSION_NAME }} nightly",
+            "versionName": "${VERSION_NAME}",
+            "versionCode": 1,
+            "description": "${COMMIT_HASH}",
             "files": [
               {
                 "source": "system32/d3d12.dll",
@@ -145,15 +119,19 @@ jobs:
             ]
           }
           EOF
-
+          
           cd final_package
           
-          # THE FIX: Use ZSTD compression directly on the files
-          # 'tar --zstd' creates a .tar.zst archive, which is what Winlator likely wants for .wcp
-          tar --zstd -cf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp *
+          tar -cf ../archive.tar .
+          
+          cd ..
+          
+          xz -9 archive.tar
+          
+          mv archive.tar.xz VKD3D-Proton-${VERSION_NAME}.wcp
 
-      - name: Upload Artifact
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: vkd3d-arm64ec
+          name: vkd3d-artifacts
           path: '*.wcp'
