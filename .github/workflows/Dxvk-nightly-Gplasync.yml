@@ -16,7 +16,7 @@ jobs:
         repository: doitsujin/dxvk
         path: dxvk
         submodules: recursive
-        fetch-depth: 0 # Important: fetch full history so we can get correct commit info
+        fetch-depth: 0
 
     - name: Install Dependencies
       run: |
@@ -26,10 +26,7 @@ jobs:
     - name: Download and Apply Patch
       run: |
         cd dxvk
-        # Download the RAW patch file directly from GitLab
         wget https://gitlab.com/Ph42oN/dxvk-gplasync/-/raw/main/patches/dxvk-gplasync-master.patch
-        
-        # Apply the patch
         git apply dxvk-gplasync-master.patch
 
     - name: Build DXVK
@@ -37,32 +34,22 @@ jobs:
         cd dxvk
         ./package-release.sh master ../dxvk-built --no-package
 
-    - name: Generate Changelog
-      run: |
-        cd dxvk
-        git log --since="24 hours ago" > ../changelog.txt
-
     - name: Prepare Package
       run: |
-        # 1. Capture Commit Hash and Date
         cd dxvk
         COMMIT_HASH=$(git rev-parse --short HEAD)
-        BUILD_DATE=$(date +'%Y-%m-%d')
         cd ..
 
-        # 2. Setup directories
         mkdir -p packaging/system32 packaging/syswow64
         cp dxvk-built/dxvk-master/x64/*.dll packaging/system32/
         cp dxvk-built/dxvk-master/x32/*.dll packaging/syswow64/
         
-        # 3. Create Dynamic profile.json
-        # We use ${GITHUB_RUN_NUMBER} for versionCode so it auto-increments (1, 2, 3...)
         cat <<EOF > packaging/profile.json
         {
           "type": "DXVK",
           "versionName": "2.7.1-gplasync-${COMMIT_HASH}",
           "versionCode": ${{ github.run_number }},
-          "description": "DXVK Nightly (GPLAsync)\nCommit: ${COMMIT_HASH}\nDate: ${BUILD_DATE}",
+          "description": "DXVK Nightly (GPLAsync)\nCommit: ${COMMIT_HASH}",
           "author": "Blank",
           "files": [
             { "source": "system32/d3d9.dll", "target": "\${system32}/d3d9.dll" },
@@ -78,7 +65,6 @@ jobs:
         EOF
 
     - name: Create WCP Package
-      # We put the commit hash in the filename too for easier file management
       run: |
         cd dxvk
         COMMIT_HASH=$(git rev-parse --short HEAD)
@@ -89,6 +75,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: dxvk-nightly-build
-        path: |
-          *.wcp
-          changelog.txt
+        path: '*.wcp'
