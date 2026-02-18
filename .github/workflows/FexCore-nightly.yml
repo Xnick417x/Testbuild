@@ -2,6 +2,7 @@ name: Build FexCore Nightly
 
 on:
   schedule:
+    # 9:00 PM CST = 03:00 UTC
     - cron: '0 3 * * *'
   workflow_dispatch:
 
@@ -74,6 +75,7 @@ jobs:
         VERSION_NAME="${CLEAN_TAG}-${COMMIT_HASH}"
         
         echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
+        echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
 
     - name: Build FEXCore
       if: env.SHOULD_BUILD == 'true'
@@ -168,7 +170,10 @@ jobs:
         tag_name: fex-nightly-${{ env.VERSION_NAME }}
         files: '*.wcp'
         name: "FEXCore Nightly ${{ env.VERSION_NAME }}"
-        body: "Automated nightly build of FEXCore - ${{ env.VERSION_NAME }}"
+        body: |
+          Automated nightly build of FEXCore.
+          
+          Commit: https://github.com/FEX-Emu/FEX/commit/${{ env.COMMIT_HASH }}
 
     - name: Cleanup Old Releases
       if: env.SHOULD_BUILD == 'true'
