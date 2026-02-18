@@ -114,3 +114,24 @@ jobs:
         gh release list --limit 100 --json tagName,createdAt --jq 'sort_by(.createdAt) | reverse | .[].tagName | select(startswith("dxvk-nightly-"))' \
         | tail -n +9 \
         | xargs -I {} sh -c 'gh release delete "{}" --cleanup-tag -y'
+
+    - name: Update README Dashboard
+      if: env.SHOULD_BUILD == 'true'
+      uses: actions/checkout@v4
+      with:
+        path: dashboard
+
+    - name: Push README Updates
+      if: env.SHOULD_BUILD == 'true'
+      run: |
+        cd dashboard
+        
+        DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/dxvk-nightly-${{ env.COMMIT_HASH }}/dxvk-gplasync-${{ env.COMMIT_HASH }}.wcp"
+        
+        sed -i "s|\(| \*\*DXVK\*\*.*\[.*Download Latest.*\]\)([^)]*)|\1($DOWNLOAD_URL)|" README.md
+        
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add README.md
+        git commit -m "Update dashboard for DXVK ${{ env.COMMIT_HASH }}"
+        git push
