@@ -21,22 +21,22 @@ These builds are automatically checked and generated every night at **9:00 PM CS
 
 ### Downloads
 
-| Component | Type | Download | History |
-| :--- | :--- | :--- | :--- |
-| **DXVK** (GPLAsync) | `x64` / `x86` | [Download Latest](https://github.com/Xnick417x/Testbuild/releases/latest) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=dxvk-nightly&expanded=true) |
-| **VKD3D-Proton** | `Standard` | [Download Latest](https://github.com/Xnick417x/Testbuild/releases/latest) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=vk3dk-nightly&expanded=true) |
-| **VKD3D-Proton** | `ARM64EC` | [Download Latest](https://github.com/Xnick417x/Testbuild/releases/latest) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=vk3dk-arm64ec-nightly&expanded=true) |
-| **FEXCore** | `ARM64EC` | [Download Latest](https://github.com/Xnick417x/Testbuild/releases/latest) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=fex-nightly&expanded=true) |
-| **Box64** | `Native` | [Download Latest](https://github.com/Xnick417x/Testbuild/releases/latest) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=box64-nightly&expanded=true) |
-| **WOWBox64** | `MinGW` | [Download Latest](https://github.com/Xnick417x/Testbuild/releases/latest) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=wowbox64-nightly&expanded=true) |
+| Component | Download | History |
+| :--- | :--- | :--- |
+| **DXVK** (GPLAsync) | [**Download Latest**](https://github.com/Xnick417x/Testbuild/releases/latest) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=dxvk-nightly&expanded=true) |
+| **VKD3D-Proton** (Standard) | [**Download Latest**](https://github.com/Xnick417x/Testbuild/releases/latest) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=vk3dk-nightly&expanded=true) |
+| **VKD3D-Proton** (ARM64EC) | [**Download Latest**](https://github.com/Xnick417x/Testbuild/releases/latest) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=vk3dk-arm64ec-nightly&expanded=true) |
+| **FEXCore** (ARM64EC) | [**Download Latest**](https://github.com/Xnick417x/Testbuild/releases/latest) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=fex-nightly&expanded=true) |
+| **Box64** (Native) | [**Download Latest**](https://github.com/Xnick417x/Testbuild/releases/latest) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=box64-nightly&expanded=true) |
+| **WOWBox64** (MinGW) | [**Download Latest**](https://github.com/Xnick417x/Testbuild/releases/latest) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=wowbox64-nightly&expanded=true) |
 
 ---
 
 ### Installation
-1.  Download the `.wcp` file.
-2.  Open **Winlator** (or your container manager).
-3.  Go to **Settings** -> **Install Content**.
-4.  Select the downloaded file to install.
+1. Download the `.wcp` file.
+2. Open **Winlator** (or your container manager).
+3. Go to **Settings** -> **Install Content**.
+4. Select the downloaded file to install.
 
 ---
 
