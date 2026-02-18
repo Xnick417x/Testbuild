@@ -46,10 +46,17 @@ jobs:
         git config --global --add safe.directory '*'
         cd src
         git fetch --tags --force
-        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "FEX-Unknown")
+        
+        # Get tag (e.g., FEX-2601)
+        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "Unknown")
+        
+        # CLEANUP: Remove "FEX-" prefix so it's just "2601"
+        CLEAN_TAG=$(echo "$LATEST_TAG" | sed 's/^FEX-//')
+        
         COMMIT_HASH=$(git rev-parse --short HEAD)
         
-        VERSION_NAME="${LATEST_TAG}-Nightly-${COMMIT_HASH}"
+        # Format: 2601-7d6a2f1 (Matches the clean style you wanted)
+        VERSION_NAME="${CLEAN_TAG}-${COMMIT_HASH}"
         
         echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
 
@@ -83,6 +90,7 @@ jobs:
         }
 
         cd src
+        
         build_arch "arm64ec" "../../stage-ec"
         build_arch "aarch64" "../../stage-wo"
 
@@ -104,13 +112,13 @@ jobs:
             exit 1
         fi
         
+        # Clean JSON: No "Author", just clean version name
         cat <<EOF > final_package/profile.json
         {
           "type": "FEXCore",
           "versionName": "${{ env.VERSION_NAME }}",
           "versionCode": ${{ github.run_number }},
-          "description": "FEXCore Nightly\\n${{ env.VERSION_NAME }}",
-          "author": "FEX-Emu / Gemini",
+          "description": "${{ env.VERSION_NAME }}",
           "files": [
             {
               "source": "system32/libarm64ecfex.dll",
@@ -127,7 +135,7 @@ jobs:
     - name: Create WCP
       run: |
         cd final_package
-        tar -cJf ../${{ env.VERSION_NAME }}.wcp .
+        tar -cJf ../FEXCore-${{ env.VERSION_NAME }}.wcp .
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
