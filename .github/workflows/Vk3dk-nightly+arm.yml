@@ -141,6 +141,13 @@ jobs:
           cd final_package
           tar -cJf ../Vk3dk-Standard-${{ env.VERSION_NAME }}.wcp *
 
+      - name: Upload Artifact (Standard)
+        if: env.SHOULD_BUILD == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: vk3dk-standard
+          path: '*.wcp'
+
       - name: Create Release (Standard)
         if: env.SHOULD_BUILD == 'true'
         uses: softprops/action-gh-release@v1
@@ -172,17 +179,24 @@ jobs:
         if: env.SHOULD_BUILD == 'true'
         run: |
           cd dashboard
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           
           DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/vk3dk-nightly-${{ env.COMMIT_HASH }}/Vk3dk-Standard-${{ env.VERSION_NAME }}.wcp"
           
-          sed -i "/\*\*VKD3D-Proton\*\* (Standard)/ s|\[\*\*Download Latest\*\*\]([^)]*)|[**Download Latest**]($DOWNLOAD_URL)|" README.md
-          
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add README.md
-          git commit -m "Update dashboard for Vk3dk Standard ${{ env.COMMIT_HASH }}"
-          git pull --rebase origin main
-          git push
+          n=0
+          until [ "$n" -ge 5 ]
+          do
+             git fetch origin main
+             git reset --hard origin/main
+             sed -i "/\*\*VKD3D-Proton\*\* (Standard)/ s|\[\*\*Download Latest\*\*\]([^)]*)|[**Download Latest**]($DOWNLOAD_URL)|" README.md
+             git add README.md
+             git commit -m "Update dashboard for Vk3dk Standard ${{ env.COMMIT_HASH }}"
+             if git push origin main; then exit 0; fi
+             n=$((n+1))
+             sleep 15
+          done
+          exit 1
 
   build-arm64ec:
     runs-on: ubuntu-24.04
@@ -340,6 +354,13 @@ jobs:
           
           mv archive.tar.xz Vk3dk-Arm64ec-${{ env.VERSION_NAME }}.wcp
 
+      - name: Upload Artifact (ARM64EC)
+        if: env.SHOULD_BUILD == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: vk3dk-Arm64ec
+          path: '*.wcp'
+
       - name: Create Release (ARM64EC)
         if: env.SHOULD_BUILD == 'true'
         uses: softprops/action-gh-release@v1
@@ -371,14 +392,21 @@ jobs:
         if: env.SHOULD_BUILD == 'true'
         run: |
           cd dashboard
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           
           DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/vk3dk-arm64ec-nightly-${{ env.COMMIT_HASH }}/Vk3dk-Arm64ec-${{ env.VERSION_NAME }}.wcp"
           
-          sed -i "/\*\*VKD3D-Proton\*\* (ARM64EC)/ s|\[\*\*Download Latest\*\*\]([^)]*)|[**Download Latest**]($DOWNLOAD_URL)|" README.md
-          
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add README.md
-          git commit -m "Update dashboard for Vk3dk ARM64EC ${{ env.COMMIT_HASH }}"
-          git pull --rebase origin main
-          git push
+          n=0
+          until [ "$n" -ge 5 ]
+          do
+             git fetch origin main
+             git reset --hard origin/main
+             sed -i "/\*\*VKD3D-Proton\*\* (ARM64EC)/ s|\[\*\*Download Latest\*\*\]([^)]*)|[**Download Latest**]($DOWNLOAD_URL)|" README.md
+             git add README.md
+             git commit -m "Update dashboard for Vk3dk ARM64EC ${{ env.COMMIT_HASH }}"
+             if git push origin main; then exit 0; fi
+             n=$((n+1))
+             sleep 15
+          done
+          exit 1
