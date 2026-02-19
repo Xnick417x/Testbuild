@@ -18,6 +18,7 @@ jobs:
         with:
           repository: ptitSeb/box64
           path: source
+          submodules: recursive
           fetch-depth: 0
 
       - name: Check for Updates
@@ -60,6 +61,27 @@ jobs:
           echo "FULL_VERSION=${VERSION}-${COMMIT}-nightly" >> $GITHUB_ENV
           echo "COMMIT_HASH=${COMMIT}" >> $GITHUB_ENV
 
+      - name: Fetch and Apply Pipetto Controller Fixes
+        if: env.SHOULD_BUILD == 'true'
+        run: |
+          cd source
+          git remote add pipetto https://github.com/Pipetto-crypto/box64.git
+          git fetch pipetto
+          PIPETTO_BRANCH=$(git remote show pipetto | awk '/HEAD branch/ {print $NF}')
+          [[ -z "$PIPETTO_BRANCH" ]] && PIPETTO_BRANCH="master"
+          MERGE_BASE=$(git merge-base HEAD pipetto/$PIPETTO_BRANCH)
+          PATCH_COUNT=$(git rev-list --count $MERGE_BASE..pipetto/$PIPETTO_BRANCH)
+          if [ "$PATCH_COUNT" -gt 0 ]; then
+            mkdir -p ../patches
+            git format-patch $MERGE_BASE..pipetto/$PIPETTO_BRANCH -o ../patches/
+            git config --global user.email "bot@github.com"
+            git config --global user.name "bot"
+            git am --3way ../patches/*.patch || {
+              git am --abort
+              git apply --3way ../patches/*.patch || true
+            }
+          fi
+
       - name: Configure and Build
         if: env.SHOULD_BUILD == 'true'
         run: |
@@ -98,7 +120,6 @@ jobs:
           name: "Box64 Nightly ${{ env.COMMIT_HASH }}"
           body: |
             Automated nightly build of Box64 (Android Native).
-            
             Commit: https://github.com/ptitSeb/box64/commit/${{ env.COMMIT_HASH }}
 
       - name: Cleanup Old Releases (Box64)
@@ -122,9 +143,7 @@ jobs:
           cd dashboard
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          
           DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/box64-nightly-${{ env.COMMIT_HASH }}/box64-${{ env.FULL_VERSION }}.wcp"
-          
           n=0
           until [ "$n" -ge 5 ]
           do
@@ -132,7 +151,7 @@ jobs:
              git reset --hard origin/main
              sed -i "/\*\*Box64\*\* (Native)/ s|\[\*\*Download Latest\*\*\]([^)]*)|[**Download Latest**]($DOWNLOAD_URL)|" README.md
              git add README.md
-             git commit -m "Update dashboard for Box64 ${{ env.COMMIT_HASH }}"
+             git commit -m "Update dashboard for Box64 ${{ env.COMMIT_HASH }}" || echo "Nothing to commit"
              if git push origin main; then exit 0; fi
              n=$((n+1))
              sleep 15
@@ -148,6 +167,7 @@ jobs:
         with:
           repository: ptitSeb/box64
           path: source
+          submodules: recursive
           fetch-depth: 0
 
       - name: Check for Updates
@@ -196,6 +216,27 @@ jobs:
           echo "FULL_VERSION=${VERSION}-${COMMIT}-nightly" >> $GITHUB_ENV
           echo "COMMIT_HASH=${COMMIT}" >> $GITHUB_ENV
 
+      - name: Fetch and Apply Pipetto Controller Fixes
+        if: env.SHOULD_BUILD == 'true'
+        run: |
+          cd source
+          git remote add pipetto https://github.com/Pipetto-crypto/box64.git
+          git fetch pipetto
+          PIPETTO_BRANCH=$(git remote show pipetto | awk '/HEAD branch/ {print $NF}')
+          [[ -z "$PIPETTO_BRANCH" ]] && PIPETTO_BRANCH="master"
+          MERGE_BASE=$(git merge-base HEAD pipetto/$PIPETTO_BRANCH)
+          PATCH_COUNT=$(git rev-list --count $MERGE_BASE..pipetto/$PIPETTO_BRANCH)
+          if [ "$PATCH_COUNT" -gt 0 ]; then
+            mkdir -p ../patches
+            git format-patch $MERGE_BASE..pipetto/$PIPETTO_BRANCH -o ../patches/
+            git config --global user.email "bot@github.com"
+            git config --global user.name "bot"
+            git am --3way ../patches/*.patch || {
+              git am --abort
+              git apply --3way ../patches/*.patch || true
+            }
+          fi
+
       - name: Configure and Build
         if: env.SHOULD_BUILD == 'true'
         run: |
@@ -234,7 +275,6 @@ jobs:
           name: "WOWBox64 Nightly ${{ env.COMMIT_HASH }}"
           body: |
             Automated nightly build of WOWBox64 (MinGW).
-            
             Commit: https://github.com/ptitSeb/box64/commit/${{ env.COMMIT_HASH }}
 
       - name: Cleanup Old Releases (WOWBox64)
@@ -258,9 +298,7 @@ jobs:
           cd dashboard
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          
           DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/wowbox64-nightly-${{ env.COMMIT_HASH }}/WOWBox64-${{ env.FULL_VERSION }}.wcp"
-          
           n=0
           until [ "$n" -ge 5 ]
           do
@@ -268,7 +306,7 @@ jobs:
              git reset --hard origin/main
              sed -i "/\*\*WOWBox64\*\* (MinGW)/ s|\[\*\*Download Latest\*\*\]([^)]*)|[**Download Latest**]($DOWNLOAD_URL)|" README.md
              git add README.md
-             git commit -m "Update dashboard for WOWBox64 ${{ env.COMMIT_HASH }}"
+             git commit -m "Update dashboard for WOWBox64 ${{ env.COMMIT_HASH }}" || echo "Nothing to commit"
              if git push origin main; then exit 0; fi
              n=$((n+1))
              sleep 15
