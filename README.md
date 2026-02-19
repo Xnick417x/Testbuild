@@ -12,11 +12,11 @@ These builds are automatically checked and generated every night at **9:00 PM CS
 ---
 
 ### Status
-* **DXVK:** [![Build Status](https://img.shields.io/github/actions/workflow/status/Xnick417x/Testbuild/Dxvk-Combined.yml?label=Build&style=flat-square)](https://github.com/Xnick417x/Testbuild/actions/workflows/Dxvk-Combined.yml)
-* **VKD3D:** [![Build Status](https://img.shields.io/github/actions/workflow/status/Xnick417x/Testbuild/Vk3dk-nightly+arm.yml?label=Build&style=flat-square)](https://github.com/Xnick417x/Testbuild/actions/workflows/Vk3dk-nightly+arm.yml)
-* **FEXCore:** [![Build Status](https://img.shields.io/github/actions/workflow/status/Xnick417x/Testbuild/FexCore-nightly.yml?label=Build&style=flat-square)](https://github.com/Xnick417x/Testbuild/actions/workflows/FexCore-nightly.yml)
-* **Box64/WOW:** [![Build Status](https://img.shields.io/github/actions/workflow/status/Xnick417x/Testbuild/Box64-nightly+Wowbox.yml?label=Build&style=flat-square)](https://github.com/Xnick417x/Testbuild/actions/workflows/Box64-nightly+Wowbox.yml)
-* **Box64 (Bionic):** [![Build Status](https://img.shields.io/github/actions/workflow/status/Xnick417x/Testbuild/Box64-bionic.yml?label=Build&style=flat-square)](https://github.com/Xnick417x/Testbuild/actions/workflows/Box64-bionic.yml)
+* **DXVK:** [![Build Status](https://img.shields.io/github/actions/workflow/status/Xnick417x/Testbuild/Dxvk-nightly-Gplasync.yml?branch=Bionic&label=Build&style=flat-square)](https://github.com/Xnick417x/Testbuild/actions/workflows/Dxvk-nightly-Gplasync.yml)
+* **VKD3D:** [![Build Status](https://img.shields.io/github/actions/workflow/status/Xnick417x/Testbuild/Vk3dk-nightly+arm.yml?branch=Bionic&label=Build&style=flat-square)](https://github.com/Xnick417x/Testbuild/actions/workflows/Vk3dk-nightly+arm.yml)
+* **FEXCore:** [![Build Status](https://img.shields.io/github/actions/workflow/status/Xnick417x/Testbuild/FexCore-nightly.yml?branch=Bionic&label=Build&style=flat-square)](https://github.com/Xnick417x/Testbuild/actions/workflows/FexCore-nightly.yml)
+* **Box64/WOW:** [![Build Status](https://img.shields.io/github/actions/workflow/status/Xnick417x/Testbuild/Box64-nightly+Wowbox.yml?branch=Bionic&label=Build&style=flat-square)](https://github.com/Xnick417x/Testbuild/actions/workflows/Box64-nightly+Wowbox.yml)
+* **Box64 (Bionic):** [![Build Status](https://img.shields.io/github/actions/workflow/status/Xnick417x/Testbuild/Box64-bionic.yml?branch=Bionic&label=Build&style=flat-square)](https://github.com/Xnick417x/Testbuild/actions/workflows/Box64-bionic.yml)
 
 ---
 
