@@ -22,6 +22,7 @@ jobs:
         with:
           repository: ptitSeb/box64
           path: source
+          submodules: recursive
           fetch-depth: 0
 
       - name: Check for Updates
