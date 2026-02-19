@@ -4,11 +4,6 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '0 3 * * *'
-  push:
-    branches:
-      - Bionic
-      - main
-      - Cred
 
 permissions:
   contents: write
@@ -22,13 +17,12 @@ jobs:
         with:
           repository: ptitSeb/box64
           path: source
-          submodules: recursive
           fetch-depth: 0
 
       - name: Check for Updates
         id: check
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.event_name }}" == "push" ]]; then
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "SHOULD_BUILD=true" >> $GITHUB_ENV
           else
             cd source
@@ -64,27 +58,6 @@ jobs:
           COMMIT=$(git rev-parse --short HEAD)
           echo "FULL_VERSION=${VERSION}-${COMMIT}-bionic" >> $GITHUB_ENV
           echo "COMMIT_HASH=${COMMIT}" >> $GITHUB_ENV
-
-      - name: Fetch and Apply Pipetto Controller Fixes
-        if: env.SHOULD_BUILD == 'true'
-        run: |
-          cd source
-          git remote add pipetto https://github.com/Pipetto-crypto/box64.git
-          git fetch pipetto
-          PIPETTO_BRANCH=$(git remote show pipetto | awk '/HEAD branch/ {print $NF}')
-          [[ -z "$PIPETTO_BRANCH" ]] && PIPETTO_BRANCH="master"
-          MERGE_BASE=$(git merge-base HEAD pipetto/$PIPETTO_BRANCH)
-          PATCH_COUNT=$(git rev-list --count $MERGE_BASE..pipetto/$PIPETTO_BRANCH)
-          if [ "$PATCH_COUNT" -gt 0 ]; then
-            mkdir -p ../patches
-            git format-patch $MERGE_BASE..pipetto/$PIPETTO_BRANCH -o ../patches/
-            git config --global user.email "bot@github.com"
-            git config --global user.name "bot"
-            git am --3way ../patches/*.patch || {
-              git am --abort
-              git apply --3way ../patches/*.patch || true
-            }
-          fi
 
       - name: Configure and Build
         if: env.SHOULD_BUILD == 'true'
