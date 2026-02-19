@@ -115,6 +115,12 @@ jobs:
           | tail -n +9 \
           | xargs -I {} sh -c 'gh release delete "{}" --cleanup-tag -y'
 
+      - name: Checkout Dashboard
+        if: env.SHOULD_BUILD == 'true'
+        uses: actions/checkout@v4
+        with:
+          path: dashboard
+
       - name: Update Dashboard (Standard)
         if: env.SHOULD_BUILD == 'true'
         run: |
@@ -318,7 +324,7 @@ jobs:
           | tail -n +9 \
           | xargs -I {} sh -c 'gh release delete "{}" --cleanup-tag -y'
 
-      - name: Update Dashboard (ARM64EC)
+      - name: Checkout Dashboard
         if: env.SHOULD_BUILD == 'true'
         uses: actions/checkout@v4
         with:
