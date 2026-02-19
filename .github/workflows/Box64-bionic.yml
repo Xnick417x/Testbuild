@@ -65,6 +65,27 @@ jobs:
           echo "FULL_VERSION=${VERSION}-${COMMIT}-bionic" >> $GITHUB_ENV
           echo "COMMIT_HASH=${COMMIT}" >> $GITHUB_ENV
 
+      - name: Fetch and Apply Pipetto Controller Fixes
+        if: env.SHOULD_BUILD == 'true'
+        run: |
+          cd source
+          git remote add pipetto https://github.com/Pipetto-crypto/box64.git
+          git fetch pipetto
+          PIPETTO_BRANCH=$(git remote show pipetto | awk '/HEAD branch/ {print $NF}')
+          [[ -z "$PIPETTO_BRANCH" ]] && PIPETTO_BRANCH="master"
+          MERGE_BASE=$(git merge-base HEAD pipetto/$PIPETTO_BRANCH)
+          PATCH_COUNT=$(git rev-list --count $MERGE_BASE..pipetto/$PIPETTO_BRANCH)
+          if [ "$PATCH_COUNT" -gt 0 ]; then
+            mkdir -p ../patches
+            git format-patch $MERGE_BASE..pipetto/$PIPETTO_BRANCH -o ../patches/
+            git config --global user.email "bot@github.com"
+            git config --global user.name "bot"
+            git am --3way ../patches/*.patch || {
+              git am --abort
+              git apply --3way ../patches/*.patch || true
+            }
+          fi
+
       - name: Configure and Build
         if: env.SHOULD_BUILD == 'true'
         run: |
@@ -72,16 +93,13 @@ jobs:
           cd build
           cmake ../source \
             -DCMAKE_C_COMPILER=${{ env.BOX64_COMPILER }} \
-            -DCMAKE_BUILD_TYPE=Release \
             -DANDROID=1 \
+            -DBIONIC=1 \
             -DARM_DYNAREC=1 \
             -DBAD_SIGNAL=1 \
             -DTERMUX=0 \
             -DHAVE_TRACE=0 \
-            -DZYDIS3=0 \
-            -DBOX32=0 \
-            -DCI=0 \
-            -DSTATICBUILD=0
+            -DCMAKE_BUILD_TYPE=Release
           make -j$(nproc)
           ${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip box64
 
