@@ -2,7 +2,7 @@ name: Build Weekly Bundle
 
 on:
   schedule:
-    - cron: '0 4 * * 5'
+    - cron: '0 4 * * 5' # Thursday at 10:00 PM CST (Friday 04:00 UTC)
   workflow_dispatch:
 
 permissions:
@@ -78,7 +78,7 @@ jobs:
              git pull origin $BRANCH_NAME --rebase
              sed -i "/\*\*Weekly Bundle\*\*/ s|\[\*\*Download Latest\*\*\]([^)]*)|[**Download Latest**]($DOWNLOAD_URL)|" README.md
              git add README.md
-             git commit -m "Update dashboard for Weekly Bundle ${{ env.WEEKLY_DATE }}"
+             git commit -m "Update dashboard for Weekly Bundle ${{ env.WEEKLY_DATE }} [skip ci]" || echo "Nothing to commit"
              if git push origin $BRANCH_NAME; then exit 0; fi
              n=$((n+1))
              sleep 15
