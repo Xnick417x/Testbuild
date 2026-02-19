@@ -1,22 +1,9 @@
-<div align="center">
-
-<img src="logo.jpg" alt="Xnick Logo" width="300"/>
-
-# Xnick's Nightly Builds
-**Automated WCP Packages for Android Emulation (Winlator, Mobox, etc.)**
-
-These builds are automatically checked and generated every night at **9:00 PM CST** if new updates exist in their official repositories.
-
-</div>
-
----
-
 ### Status
 * **DXVK:** [![Build Status](https://img.shields.io/github/actions/workflow/status/Xnick417x/Winlator-Bionic-Nightly-wcp/Dxvk-nightly-Gplasync.yml?label=Build&style=flat-square)](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/actions/workflows/Dxvk-nightly-Gplasync.yml)
 * **VKD3D:** [![Build Status](https://img.shields.io/github/actions/workflow/status/Xnick417x/Winlator-Bionic-Nightly-wcp/Vk3dk-nightly+arm.yml?label=Build&style=flat-square)](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/actions/workflows/Vk3dk-nightly+arm.yml)
 * **FEXCore:** [![Build Status](https://img.shields.io/github/actions/workflow/status/Xnick417x/Winlator-Bionic-Nightly-wcp/FexCore-nightly.yml?label=Build&style=flat-square)](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/actions/workflows/FexCore-nightly.yml)
-* **Box64/WOW:** [![Build Status](https://img.shields.io/github/actions/workflow/status/Xnick417x/Winlator-Bionic-Nightly-wcp/Box64-nightly+Wowbox.yml?label=Build&style=flat-square)](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/actions/workflows/Box64-nightly+Wowbox.yml)
-* **Box64 (Bionic):** [![Build Status](https://img.shields.io/github/actions/workflow/status/Xnick417x/Winlator-Bionic-Nightly-wcp/Box64-bionic.yml?label=Build&style=flat-square)](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/actions/workflows/Box64-bionic.yml)
+* **Box64 / WOWBox64:** [![Build Status](https://img.shields.io/github/actions/workflow/status/Xnick417x/Winlator-Bionic-Nightly-wcp/Box64-nightly+Wowbox.yml?label=Build&style=flat-square)](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/actions/workflows/Box64-nightly+Wowbox.yml)
+* **Box64 (WIP):** [![Build Status](https://img.shields.io/github/actions/workflow/status/Xnick417x/Winlator-Bionic-Nightly-wcp/Box64-bionic.yml?label=Build&style=flat-square)](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/actions/workflows/Box64-bionic.yml)
 
 ---
 
@@ -30,29 +17,6 @@ These builds are automatically checked and generated every night at **9:00 PM CS
 | **VKD3D-Proton** (Standard) | [**Download Latest**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/vk3dk-nightly-d6ac0aec/Vk3dk-Standard-3.0b-d6ac0aec.wcp) | [View History](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases?q=vk3dk-nightly+NOT+arm64ec+NOT+Weekly&expanded=true) |
 | **VKD3D-Proton** (ARM64EC) | [**Download Latest**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/vk3dk-arm64ec-nightly-d6ac0aec/Vk3dk-Arm64ec-3.0b-arm64ec-d6ac0aec.wcp) | [View History](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases?q=vk3dk-arm64ec-nightly+NOT+Weekly&expanded=true) |
 | **FEXCore** (ARM64EC) | [**Download Latest**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/fex-nightly-2601-49a37c7d6/FEXCore-2601-49a37c7d6.wcp) | [View History](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases?q=fex-nightly+NOT+Weekly&expanded=true) |
-| **Box64** (Native) | [**Download Latest**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/box64-nightly-857991c50/box64-0.4.1-857991c50-nightly.wcp) | [View History](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases?q=box64-nightly+NOT+wowbox64+NOT+bionic+NOT+Weekly&expanded=true) |
-| **Box64** (Bionic) | [**Download Latest**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/bionic-box64-nightly-857991c50/bionic-box64-0.4.1-857991c50-bionic.wcp) | [View History](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases?q=bionic-box64-nightly+NOT+Weekly&expanded=true) |
-| **WOWBox64** (MinGW) | [**Download Latest**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/wowbox64-nightly-857991c50/WOWBox64-0.4.1-857991c50-nightly.wcp) | [View History](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases?q=wowbox64-nightly+NOT+Weekly&expanded=true) |
-
----
-
-### Installation
-1. Download the `.wcp` file (or unzip the Weekly Bundle).
-2. Open **Winlator** (or your container manager).
-3. Go to **Settings** -> **Install Content**.
-4. Select the downloaded file to install.
-
----
-
-### Credits
-* FEX [**FEX-Emu**](https://github.com/FEX-Emu)
-* Box64 [**ptitSeb**](https://github.com/ptitSeb)
-* DXVK [**Philip Rebohle**](https://github.com/doitsujin)
-* DXVK-Sarek [**pythonlover02**](https://github.com/pythonlover02)
-* DXVK-GPLAsync Patch [**Ph42oN**](https://gitlab.com/Ph42oN)
-* VKD3D [**Hans-Kristian Arntzen**](https://github.com/HansKristian-Work)
-* Freedreno Turnip driver [**Mesa**](https://gitlab.freedesktop.org/mesa/mesa)
-
-<div align="center">
-Maintained by Xnick417x
-</div>
+| **Box64** Standard | [**Download Latest**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/box64-nightly-857991c50/box64-0.4.1-857991c50-nightly.wcp) | [View History](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases?q=box64-nightly+NOT+wowbox64+NOT+bionic+NOT+Weekly&expanded=true) |
+| **Box64** Non standard - wip | [**Download Latest**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/bionic-box64-nightly-857991c50/bionic-box64-0.4.1-857991c50-bionic.wcp) | [View History](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases?q=bionic-box64-nightly+NOT+Weekly&expanded=true) |
+| **WOWBox64** | [**Download Latest**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/wowbox64-nightly-857991c50/WOWBox64-0.4.1-857991c50-nightly.wcp) | [View History](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases?q=wowbox64-nightly+NOT+Weekly&expanded=true) |
