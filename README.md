@@ -45,9 +45,6 @@ These builds are automatically checked and generated every night at **9:00 PM CS
 ---
 
 ### Credits
-
-Third-party components used for packaging (such as DXVK, Wine, vkd3d-proton, FEX, etc.) retain their original upstream licenses. WCP packages redistribute unmodified (or minimally patched) binaries, and all copyrights and credits belong to the original authors.
-
 * FEX [**FEX-Emu**](https://github.com/FEX-Emu)
 * Box64 [**ptitSeb**](https://github.com/ptitSeb)
 * DXVK [**Philip Rebohle**](https://github.com/doitsujin)
