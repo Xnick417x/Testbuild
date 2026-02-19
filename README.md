@@ -54,6 +54,11 @@ Third-party components used for packaging (such as DXVK, Wine, vkd3d-proton, FEX
 * DXVK-GPLAsync Patch [**Ph42oN**](https://gitlab.com/Ph42oN)
 * VKD3D [**Hans-Kristian Arntzen**](https://github.com/HansKristian-Work)
 * Freedreno Turnip driver [**Mesa**](https://gitlab.freedesktop.org/mesa/mesa)
+* Winlator [**Bruno**](https://github.com/brunodev85/winlator)
+* Winlator cmod [**Coffincolors**](https://github.com/coffincolors/winlator) + [**Pipetto-crypto**](https://github.com/Pipetto-crypto/winlator)
+* Winlator - Ludashi [**StevenMXZ**](https://github.com/StevenMXZ/Winlator-Ludashi)
+* Pipetto-crypto Box64 fix [**Pipetto-crypto**](https://github.com/Pipetto-crypto/box64)
+* Wine [**WineHQ**](https://www.winehq.org/)
 
 <div align="center">
 Maintained by Xnick417x
