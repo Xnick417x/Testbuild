@@ -37,6 +37,7 @@ jobs:
           download_latest "vk3dk-arm64ec-nightly-"
           download_latest "fex-nightly-"
           download_latest "box64-nightly-"
+          download_latest "bionic-box64-nightly-"
           download_latest "wowbox64-nightly-"
 
       - name: Create Zip Bundle
@@ -59,11 +60,10 @@ jobs:
             * DXVK (GPLAsync) - Standard & ARM64EC
             * VKD3D-Proton (Standard & ARM64EC)
             * FEXCore
-            * Box64 & WOWBox64
+            * Box64 (Native & Bionic) & WOWBox64
 
       - name: Update Dashboard (Weekly)
         run: |
-          cd dashboard
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           
