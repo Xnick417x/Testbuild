@@ -24,7 +24,7 @@ These builds are automatically checked and generated every night at **9:00 PM CS
 
 | Component | Download | History |
 | :--- | :--- | :--- |
-| **Weekly Bundle** (All-in-One) | [**Download Latest**](#) | [View History](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases?q=Weekly&expanded=true) |
+| **Weekly Bundle** (All-in-One) | [**Download Latest**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Weekly-2026-02-19/Weekly-2026-02-19.zip) | [View History](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases?q=Weekly&expanded=true) |
 | **DXVK** (GPLAsync) | [**Download Latest**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/dxvk-nightly-d222d2c3/dxvk-gplasync-d222d2c3.wcp) | [View History](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases?q=dxvk-nightly+NOT+arm64ec&expanded=true) |
 | **DXVK** (ARM64EC) | [**Download Latest**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/dxvk-arm64ec-nightly-d222d2c3/DXVK-ARM64EC-v2.7.1-gplasync-arm64ec-d222d2c3.wcp) | [View History](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases?q=dxvk-arm64ec-nightly&expanded=true) |
 | **VKD3D-Proton** (Standard) | [**Download Latest**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/vk3dk-nightly-d6ac0aec/Vk3dk-Standard-3.0b-d6ac0aec.wcp) | [View History](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases?q=vk3dk-nightly+NOT+arm64ec&expanded=true) |
