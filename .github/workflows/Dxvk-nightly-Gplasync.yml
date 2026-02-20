@@ -65,22 +65,46 @@ jobs:
           cp dxvk-built/dxvk-master/x64/*.dll packaging/system32/
           cp dxvk-built/dxvk-master/x32/*.dll packaging/syswow64/
           
-          # Removed description field
           cat <<EOF > packaging/profile.json
           {
             "type": "DXVK",
             "versionName": "2.7.1-gplasync-${COMMIT_HASH}",
             "versionCode": 0,
+            "description": "DXVK 2.7.1 GPLAsync",
             "author": "Blank",
             "files": [
-              { "source": "system32/d3d9.dll", "target": "\${system32}/d3d9.dll" },
-              { "source": "system32/d3d10core.dll", "target": "\${system32}/d3d10core.dll" },
-              { "source": "system32/d3d11.dll", "target": "\${system32}/d3d11.dll" },
-              { "source": "system32/dxgi.dll", "target": "\${system32}/dxgi.dll" },
-              { "source": "syswow64/d3d9.dll", "target": "\${syswow64}/d3d9.dll" },
-              { "source": "syswow64/d3d10core.dll", "target": "\${syswow64}/d3d10core.dll" },
-              { "source": "syswow64/d3d11.dll", "target": "\${syswow64}/d3d11.dll" },
-              { "source": "syswow64/dxgi.dll", "target": "\${syswow64}/dxgi.dll" }
+              {
+                "source": "system32/d3d9.dll",
+                "target": "\${system32}/d3d9.dll"
+              },
+              {
+                "source": "system32/d3d10core.dll",
+                "target": "\${system32}/d3d10core.dll"
+              },
+              {
+                "source": "system32/d3d11.dll",
+                "target": "\${system32}/d3d11.dll"
+              },
+              {
+                "source": "system32/dxgi.dll",
+                "target": "\${system32}/dxgi.dll"
+              },
+              {
+                "source": "syswow64/d3d9.dll",
+                "target": "\${syswow64}/d3d9.dll"
+              },
+              {
+                "source": "syswow64/d3d10core.dll",
+                "target": "\${syswow64}/d3d10core.dll"
+              },
+              {
+                "source": "syswow64/d3d11.dll",
+                "target": "\${syswow64}/d3d11.dll"
+              },
+              {
+                "source": "syswow64/dxgi.dll",
+                "target": "\${syswow64}/dxgi.dll"
+              }
             ]
           }
           EOF
@@ -91,8 +115,8 @@ jobs:
           cd dxvk
           COMMIT_HASH=$(git rev-parse --short HEAD)
           echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
-          cd ..
-          tar -cJf dxvk-gplasync-${COMMIT_HASH}.wcp -C packaging .
+          cd ../packaging
+          tar -cJf ../dxvk-gplasync-${COMMIT_HASH}.wcp *
 
       - name: Create Release
         if: env.SHOULD_BUILD == 'true'
@@ -132,7 +156,6 @@ jobs:
           DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/dxvk-nightly-${{ env.COMMIT_HASH }}/dxvk-gplasync-${{ env.COMMIT_HASH }}.wcp"
           BRANCH_NAME="${{ github.ref_name }}"
           
-          # Ensure we are on the correct branch
           git checkout $BRANCH_NAME 2>/dev/null || git checkout -b $BRANCH_NAME
           
           n=0
@@ -211,7 +234,6 @@ jobs:
           COMMIT_HASH=$(git rev-parse --short HEAD)
           echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
           
-          # Get Tag for version name
           git fetch --tags
           LATEST_TAG=$(git describe --tags --abbrev=0)
           echo "VERSION_NAME=${LATEST_TAG}-gplasync-arm64ec-${COMMIT_HASH}" >> $GITHUB_ENV
@@ -283,23 +305,53 @@ jobs:
           llvm-strip --strip-all packaging/system32/*.dll
           llvm-strip --strip-all packaging/syswow64/*.dll
 
-          # Removed description field
           cat <<EOF > packaging/profile.json
           {
             "type": "DXVK",
             "versionName": "${{ env.VERSION_NAME }}",
             "versionCode": 0,
+            "description": "DXVK ARM64EC",
             "files": [
-              {"source": "system32/d3d10core.dll", "target": "\${system32}/d3d10core.dll"},
-              {"source": "system32/d3d11.dll", "target": "\${system32}/d3d11.dll"},
-              {"source": "system32/d3d8.dll", "target": "\${system32}/d3d8.dll"},
-              {"source": "system32/d3d9.dll", "target": "\${system32}/d3d9.dll"},
-              {"source": "system32/dxgi.dll", "target": "\${system32}/dxgi.dll"},
-              {"source": "syswow64/d3d10core.dll", "target": "\${syswow64}/d3d10core.dll"},
-              {"source": "syswow64/d3d11.dll", "target": "\${syswow64}/d3d11.dll"},
-              {"source": "syswow64/d3d8.dll", "target": "\${syswow64}/d3d8.dll"},
-              {"source": "syswow64/d3d9.dll", "target": "\${syswow64}/d3d9.dll"},
-              {"source": "syswow64/dxgi.dll", "target": "\${syswow64}/dxgi.dll"}
+              {
+                "source": "system32/d3d10core.dll",
+                "target": "\${system32}/d3d10core.dll"
+              },
+              {
+                "source": "system32/d3d11.dll",
+                "target": "\${system32}/d3d11.dll"
+              },
+              {
+                "source": "system32/d3d8.dll",
+                "target": "\${system32}/d3d8.dll"
+              },
+              {
+                "source": "system32/d3d9.dll",
+                "target": "\${system32}/d3d9.dll"
+              },
+              {
+                "source": "system32/dxgi.dll",
+                "target": "\${system32}/dxgi.dll"
+              },
+              {
+                "source": "syswow64/d3d10core.dll",
+                "target": "\${syswow64}/d3d10core.dll"
+              },
+              {
+                "source": "syswow64/d3d11.dll",
+                "target": "\${syswow64}/d3d11.dll"
+              },
+              {
+                "source": "syswow64/d3d8.dll",
+                "target": "\${syswow64}/d3d8.dll"
+              },
+              {
+                "source": "syswow64/d3d9.dll",
+                "target": "\${syswow64}/d3d9.dll"
+              },
+              {
+                "source": "syswow64/dxgi.dll",
+                "target": "\${syswow64}/dxgi.dll"
+              }
             ]
           }
           EOF
@@ -345,7 +397,6 @@ jobs:
           DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/dxvk-arm64ec-nightly-${{ env.COMMIT_HASH }}/DXVK-ARM64EC-${{ env.VERSION_NAME }}.wcp"
           BRANCH_NAME="${{ github.ref_name }}"
           
-          # Ensure we are on the correct branch
           git checkout $BRANCH_NAME 2>/dev/null || git checkout -b $BRANCH_NAME
           
           n=0
