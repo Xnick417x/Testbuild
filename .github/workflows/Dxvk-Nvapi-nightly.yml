@@ -1,6 +1,9 @@
 name: Build DXVK+NVAPI Combined
 
 on:
+  push:
+    branches:
+      - your-branch-name-here
   schedule:
     - cron: '0 3 * * *'
   workflow_dispatch:
@@ -24,7 +27,7 @@ jobs:
       - name: Check for Updates
         id: check
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.event_name }}" == "push" ]]; then
             echo "SHOULD_BUILD=true" >> $GITHUB_ENV
           else
             cd dxvk
@@ -244,7 +247,7 @@ jobs:
       - name: Check for Updates
         id: check
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.event_name }}" == "push" ]]; then
             echo "SHOULD_BUILD=true" >> $GITHUB_ENV
           else
             cd dxvk
