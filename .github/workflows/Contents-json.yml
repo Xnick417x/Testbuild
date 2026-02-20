@@ -25,6 +25,7 @@ jobs:
           import subprocess
 
           pack_data = []
+          repo = os.environ.get("GITHUB_REPOSITORY")
 
           nightly_targets = [
               ("DXVK", "dxvk-nightly-"),
@@ -54,7 +55,7 @@ jobs:
               result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
               return result.stdout.strip()
 
-          tags_json = run_gh("gh release list --limit 100 --json tagName")
+          tags_json = run_gh(f"gh release list --repo {repo} --limit 100 --json tagName")
           all_tags = []
           if tags_json:
               try:
@@ -65,7 +66,7 @@ jobs:
           for w_type, prefix in nightly_targets:
               tag = next((t for t in all_tags if t.startswith(prefix)), None)
               if tag:
-                  assets_json = run_gh(f"gh release view {tag} --json assets")
+                  assets_json = run_gh(f"gh release view {tag} --repo {repo} --json assets")
                   if assets_json:
                       try:
                           assets = json.loads(assets_json).get("assets", [])
@@ -75,28 +76,28 @@ jobs:
                                   clean_name = asset_name.replace(".wcp.xz", "").replace(".wcp", "")
                                   pack_data.append({
                                       "type": w_type,
-                                      "verName": "Nightly - " + clean_name,
+                                      "verName": clean_name,
                                       "verCode": "0",
-                                      "remoteUrl": asset.get("url", "")
+                                      "remoteUrl": f"https://github.com/{repo}/releases/download/{tag}/{asset_name}"
                                   })
                       except:
                           pass
 
           for w_type, tag in stable_targets:
-              assets_json = run_gh(f"gh release view {tag} --json assets 2>/dev/null")
+              assets_json = run_gh(f"gh release view {tag} --repo {repo} --json assets")
               if assets_json:
                   try:
-                      assets = json.loads(assets_json).get("assets", [])
-                      for asset in assets:
-                          asset_name = asset.get("name", "")
-                          if asset_name.endswith(".wcp") or asset_name.endswith(".wcp.xz"):
-                              clean_name = asset_name.replace(".wcp.xz", "").replace(".wcp", "")
-                              pack_data.append({
-                                  "type": w_type,
-                                  "verName": "Stable - " + clean_name,
-                                  "verCode": "0",
-                                  "remoteUrl": asset.get("url", "")
-                              })
+                          assets = json.loads(assets_json).get("assets", [])
+                          for asset in assets:
+                              asset_name = asset.get("name", "")
+                              if asset_name.endswith(".wcp") or asset_name.endswith(".wcp.xz"):
+                                  clean_name = asset_name.replace(".wcp.xz", "").replace(".wcp", "")
+                                  pack_data.append({
+                                      "type": w_type,
+                                      "verName": clean_name,
+                                      "verCode": "0",
+                                      "remoteUrl": f"https://github.com/{repo}/releases/download/{tag}/{asset_name}"
+                                  })
                   except:
                       pass
 
