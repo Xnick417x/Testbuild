@@ -11,6 +11,15 @@ These builds are automatically checked and generated every night at **9:00 PM CS
 
 ---
 
+### Contents for Winlator
+Copy the link below, open Winlator, and go to **Settings** -> **Install Content** -> **Paste URL**.
+
+```text
+[https://raw.githubusercontent.com/Xnick417x/Winlator-Bionic-Nightly-wcp/main/content.json](https://raw.githubusercontent.com/Xnick417x/Winlator-Bionic-Nightly-wcp/main/content.json)
+```
+
+---
+
 ### Status
 * **DXVK:** [![Build Status](https://img.shields.io/github/actions/workflow/status/Xnick417x/Winlator-Bionic-Nightly-wcp/Dxvk-nightly-Gplasync.yml?label=Build&style=flat-square)](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/actions/workflows/Dxvk-nightly-Gplasync.yml)
 * **VKD3D:** [![Build Status](https://img.shields.io/github/actions/workflow/status/Xnick417x/Winlator-Bionic-Nightly-wcp/Vk3dk-nightly+arm.yml?label=Build&style=flat-square)](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/actions/workflows/Vk3dk-nightly+arm.yml)
