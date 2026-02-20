@@ -325,6 +325,12 @@
   },
   {
     "type": "Wine",
+    "verName": "Stable - proton-10-arm64ec",
+    "verCode": "0",
+    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Wine/proton-10-arm64ec.wcp.xz"
+  },
+  {
+    "type": "Wine",
     "verName": "Stable - wine-10_ref4ik",
     "verCode": "0",
     "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Wine/wine-10_ref4ik.wcp"
