@@ -134,7 +134,7 @@ jobs:
         {
           "type": "FEXCore",
           "versionName": "${{ env.VERSION_NAME }}",
-          "versionCode": ${{ github.run_number }},
+          "versionCode": 0,
           "description": "${{ env.VERSION_NAME }}",
           "files": [
             {

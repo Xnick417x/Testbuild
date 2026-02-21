@@ -123,10 +123,22 @@ jobs:
             "versionCode": 0,
             "description": "Vk3dk Standard Nightly ${{ env.COMMIT_HASH }}",
             "files": [
-              {"source": "system32/d3d12.dll", "target": "\${system32}/d3d12.dll"},
-              {"source": "system32/d3d12core.dll", "target": "\${system32}/d3d12core.dll"},
-              {"source": "syswow64/d3d12.dll", "target": "\${syswow64}/d3d12.dll"},
-              {"source": "syswow64/d3d12core.dll", "target": "\${syswow64}/d3d12core.dll"}
+              {
+                "source": "system32/d3d12.dll",
+                "target": "\${system32}/d3d12.dll"
+              },
+              {
+                "source": "system32/d3d12core.dll",
+                "target": "\${system32}/d3d12core.dll"
+              },
+              {
+                "source": "syswow64/d3d12.dll",
+                "target": "\${syswow64}/d3d12.dll"
+              },
+              {
+                "source": "syswow64/d3d12core.dll",
+                "target": "\${syswow64}/d3d12core.dll"
+              }
             ]
           }
           EOF
@@ -306,13 +318,25 @@ jobs:
           {
             "type": "VKD3D",
             "versionName": "${{ env.VERSION_NAME }}",
-            "versionCode": 1,
+            "versionCode": 0,
             "description": "Vk3dk Arm64ec Nightly ${{ env.COMMIT_HASH }}",
             "files": [
-              {"source": "system32/d3d12.dll", "target": "\${system32}/d3d12.dll"},
-              {"source": "system32/d3d12core.dll", "target": "\${system32}/d3d12core.dll"},
-              {"source": "syswow64/d3d12.dll", "target": "\${syswow64}/d3d12.dll"},
-              {"source": "syswow64/d3d12core.dll", "target": "\${syswow64}/d3d12core.dll"}
+              {
+                "source": "system32/d3d12.dll",
+                "target": "\${system32}/d3d12.dll"
+              },
+              {
+                "source": "system32/d3d12core.dll",
+                "target": "\${system32}/d3d12core.dll"
+              },
+              {
+                "source": "syswow64/d3d12.dll",
+                "target": "\${syswow64}/d3d12.dll"
+              },
+              {
+                "source": "syswow64/d3d12core.dll",
+                "target": "\${syswow64}/d3d12core.dll"
+              }
             ]
           }
           EOF
