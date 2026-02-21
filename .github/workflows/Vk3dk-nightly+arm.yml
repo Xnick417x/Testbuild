@@ -306,7 +306,7 @@ jobs:
           {
             "type": "VKD3D",
             "versionName": "${{ env.VERSION_NAME }}",
-            "versionCode": 1,
+            "versionCode": 0,
             "description": "Vk3dk Arm64ec Nightly ${{ env.COMMIT_HASH }}",
             "files": [
               {"source": "system32/d3d12.dll", "target": "\${system32}/d3d12.dll"},
