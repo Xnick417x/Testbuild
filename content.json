@@ -73,18 +73,6 @@
   },
   {
     "type": "DXVK",
-    "verName": "DXVK-ARM64EC-v2.7.1-gplasync-arm64ec-02c54022",
-    "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/dxvk-arm64ec-nightly-02c54022/DXVK-ARM64EC-v2.7.1-gplasync-arm64ec-02c54022.wcp"
-  },
-  {
-    "type": "DXVK",
-    "verName": "DXVK-NVAPI-ARM64EC-v2.7.1-nvapi-arm64ec-02c54022",
-    "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/dxvk-nvapi-arm64ec-nightly-02c54022/DXVK-NVAPI-ARM64EC-v2.7.1-nvapi-arm64ec-02c54022.wcp"
-  },
-  {
-    "type": "DXVK",
     "verName": "Dxvk-1.10.3-arm64ec-async",
     "verCode": "0",
     "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Stable-Arm64ec-Dxvk/Dxvk-1.10.3-arm64ec-async.wcp"
