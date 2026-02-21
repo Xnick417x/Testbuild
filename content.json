@@ -19,9 +19,9 @@
   },
   {
     "type": "Box64",
-    "verName": "Box64-0.3.6-fix-1",
+    "verName": "Box64-0.3.6-fix",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Stable-Box64/Box64-0.3.6-fix-1.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Stable-Box64/Box64-0.3.6-fix.wcp"
   },
   {
     "type": "Box64",
@@ -136,6 +136,18 @@
     "verName": "Dxvk-arm64ec-2.7.1",
     "verCode": "0",
     "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Stable-Arm64ec-Dxvk/Dxvk-arm64ec-2.7.1.wcp"
+  },
+  {
+    "type": "DXVK",
+    "verName": "dxvk-1.7.3-async",
+    "verCode": "0",
+    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Stable-Dxvk/dxvk-1.7.3-async.wcp"
+  },
+  {
+    "type": "DXVK",
+    "verName": "dxvk-1.9.4-async",
+    "verCode": "0",
+    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Stable-Dxvk/dxvk-1.9.4-async.wcp"
   },
   {
     "type": "DXVK",
@@ -286,6 +298,24 @@
     "verName": "Vk3dk-proton-3.0b",
     "verCode": "0",
     "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Stable-Vk3dk/Vk3dk-proton-3.0b.wcp"
+  },
+  {
+    "type": "VKD3D",
+    "verName": "vkd3d-proton-2.3.1",
+    "verCode": "0",
+    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Stable-Vk3dk/vkd3d-proton-2.3.1.wcp"
+  },
+  {
+    "type": "VKD3D",
+    "verName": "vkd3d-proton-2.4",
+    "verCode": "0",
+    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Stable-Vk3dk/vkd3d-proton-2.4.wcp"
+  },
+  {
+    "type": "VKD3D",
+    "verName": "vkd3d-proton-2.8",
+    "verCode": "0",
+    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Stable-Vk3dk/vkd3d-proton-2.8.wcp"
   },
   {
     "type": "WOWBox64",
