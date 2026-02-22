@@ -14,9 +14,7 @@ These builds are automatically checked and generated every night at **9:00 PM CS
 ### Contents for Winlator
 Copy the link below, open Winlator, and go to **Settings** -> **Downloadable Content URL** -> **Paste URL**.
 
-```text
-https://raw.githubusercontent.com/Xnick417x/Winlator-Bionic-Nightly-wcp/refs/heads/main/content.json
-```
+    [https://raw.githubusercontent.com/Xnick417x/Winlator-Bionic-Nightly-wcp/refs/heads/main/content.json](https://raw.githubusercontent.com/Xnick417x/Winlator-Bionic-Nightly-wcp/refs/heads/main/content.json)
 
 ---
 
@@ -60,6 +58,9 @@ https://raw.githubusercontent.com/Xnick417x/Winlator-Bionic-Nightly-wcp/refs/hea
 
 ###  Wine Layers (Bionic)
 [**Download Assets**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/tag/Wine)
+
+### Wine Layers (GameNative) - Proton
+[**Download Assets**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/tag/GameNative)
 
 ###  Runtime Packages
 [**Download**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Packages/Runtime.packages.zip)
