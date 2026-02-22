@@ -61,7 +61,7 @@ https://raw.githubusercontent.com/Xnick417x/Winlator-Bionic-Nightly-wcp/refs/hea
 [**Download Assets**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/tag/Wine)
 
 ### Dxvk - Sarek - Stables
-[**(Download)**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/tag/Sarek)
+[**Download Assets**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/tag/Sarek)
 
 ###  Runtime Packages
 [**Download**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Packages/Runtime.packages.zip)
