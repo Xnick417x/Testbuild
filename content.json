@@ -367,15 +367,15 @@
   },
   {
     "type": "Wine",
-    "verName": "23-proton-wine-10.0-4-arm64ec",
+    "verName": "24-proton-10.0-4-x86_64",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Wine/23-proton-wine-10.0-4-arm64ec.wcp.xz"
+    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Wine/24-proton-10.0-4-x86_64.wcp.xz"
   },
   {
     "type": "Wine",
-    "verName": "23-proton-wine-10.0-4-x86_64",
+    "verName": "24-proton-wine-10.0-4-arm64ec",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Wine/23-proton-wine-10.0-4-x86_64.wcp.xz"
+    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Wine/24-proton-wine-10.0-4-arm64ec.wcp.xz"
   },
   {
     "type": "Wine",
