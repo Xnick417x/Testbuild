@@ -49,27 +49,27 @@
   },
   {
     "type": "Box64",
-    "verName": "bionic-box64-0.4.1-dff10fdfc-bionic",
+    "verName": "bionic-box64-0.4.1-16107c0be-bionic",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/bionic-box64-nightly-dff10fdfc/bionic-box64-0.4.1-dff10fdfc-bionic.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/bionic-box64-nightly-16107c0be/bionic-box64-0.4.1-16107c0be-bionic.wcp"
   },
   {
     "type": "Box64",
-    "verName": "box64-0.4.1-dff10fdfc-nightly",
+    "verName": "box64-0.4.1-16107c0be-nightly",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/box64-nightly-dff10fdfc/box64-0.4.1-dff10fdfc-nightly.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/box64-nightly-16107c0be/box64-0.4.1-16107c0be-nightly.wcp"
   },
   {
     "type": "DXVK",
-    "verName": "2.7.1-gplasync-arm64ec-fae3c436",
+    "verName": "2.7.1-gplasync-arm64ec-c42bd323",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/dxvk-arm64ec-nightly-fae3c436/2.7.1-gplasync-arm64ec-fae3c436.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/dxvk-arm64ec-nightly-c42bd323/2.7.1-gplasync-arm64ec-c42bd323.wcp"
   },
   {
     "type": "DXVK",
-    "verName": "2.7.1-nvapi-arm64ec-fae3c436",
+    "verName": "2.7.1-nvapi-arm64ec-c42bd323",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/dxvk-nvapi-arm64ec-nightly-fae3c436/2.7.1-nvapi-arm64ec-fae3c436.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/dxvk-nvapi-arm64ec-nightly-c42bd323/2.7.1-nvapi-arm64ec-c42bd323.wcp"
   },
   {
     "type": "DXVK",
@@ -163,15 +163,15 @@
   },
   {
     "type": "DXVK",
-    "verName": "dxvk-gplasync-fae3c436",
+    "verName": "dxvk-gplasync-c42bd323",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/dxvk-nightly-fae3c436/dxvk-gplasync-fae3c436.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/dxvk-nightly-c42bd323/dxvk-gplasync-c42bd323.wcp"
   },
   {
     "type": "DXVK",
-    "verName": "dxvk-nvapi-gplasync-fae3c436",
+    "verName": "dxvk-nvapi-gplasync-c42bd323",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/dxvk-nvapi-nightly-fae3c436/dxvk-nvapi-gplasync-fae3c436.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/dxvk-nvapi-nightly-c42bd323/dxvk-nvapi-gplasync-c42bd323.wcp"
   },
   {
     "type": "FEXCore",
@@ -223,9 +223,9 @@
   },
   {
     "type": "FEXCore",
-    "verName": "FEXCore-2601-f5b08bbea",
+    "verName": "FEXCore-2601-5849001d0",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/fex-nightly-2601-f5b08bbea/FEXCore-2601-f5b08bbea.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/fex-nightly-2601-5849001d0/FEXCore-2601-5849001d0.wcp"
   },
   {
     "type": "VKD3D",
@@ -253,9 +253,9 @@
   },
   {
     "type": "VKD3D",
-    "verName": "Vk3dk-Arm64ec-3.0b-arm64ec-9ced67dc",
+    "verName": "Vk3dk-Arm64ec-3.0b-arm64ec-89383e70",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/vk3dk-arm64ec-nightly-9ced67dc/Vk3dk-Arm64ec-3.0b-arm64ec-9ced67dc.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/vk3dk-arm64ec-nightly-89383e70/Vk3dk-Arm64ec-3.0b-arm64ec-89383e70.wcp"
   },
   {
     "type": "VKD3D",
@@ -277,9 +277,9 @@
   },
   {
     "type": "VKD3D",
-    "verName": "Vk3dk-Standard-3.0b-9ced67dc",
+    "verName": "Vk3dk-Standard-3.0b-89383e70",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/vk3dk-nightly-9ced67dc/Vk3dk-Standard-3.0b-9ced67dc.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/vk3dk-nightly-89383e70/Vk3dk-Standard-3.0b-89383e70.wcp"
   },
   {
     "type": "VKD3D",
@@ -319,9 +319,9 @@
   },
   {
     "type": "WOWBox64",
-    "verName": "WOWBox64-0.4.1-dff10fdfc-nightly",
+    "verName": "WOWBox64-0.4.1-16107c0be-nightly",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/wowbox64-nightly-dff10fdfc/WOWBox64-0.4.1-dff10fdfc-nightly.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/wowbox64-nightly-16107c0be/WOWBox64-0.4.1-16107c0be-nightly.wcp"
   },
   {
     "type": "WOWBox64",
@@ -355,18 +355,6 @@
   },
   {
     "type": "Wine",
-    "verName": "04-proton-10-4-arm64ec",
-    "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Wine/04-proton-10-4-arm64ec.wcp.xz"
-  },
-  {
-    "type": "Wine",
-    "verName": "04-proton-10-4-x86_64",
-    "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Wine/04-proton-10-4-x86_64.wcp.xz"
-  },
-  {
-    "type": "Wine",
     "verName": "24-proton-10.0-4-x86_64",
     "verCode": "0",
     "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Wine/24-proton-10.0-4-x86_64.wcp.xz"
@@ -376,6 +364,18 @@
     "verName": "24-proton-wine-10.0-4-arm64ec",
     "verCode": "0",
     "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Wine/24-proton-wine-10.0-4-arm64ec.wcp.xz"
+  },
+  {
+    "type": "Wine",
+    "verName": "27-proton-10.0-4-arm64ec",
+    "verCode": "0",
+    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Wine/27-proton-10.0-4-arm64ec.wcp.xz"
+  },
+  {
+    "type": "Wine",
+    "verName": "27-proton-10.0-4-x86_64",
+    "verCode": "0",
+    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Wine/27-proton-10.0-4-x86_64.wcp.xz"
   },
   {
     "type": "Wine",
