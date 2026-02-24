@@ -7,6 +7,8 @@
 
 These builds are automatically checked and generated every night at **9:00 PM CST** if new updates exist in their official repositories.
 
+Contents.Json updated at **12:00 AM CST**
+
 </div>
 
 ---
@@ -15,6 +17,8 @@ These builds are automatically checked and generated every night at **9:00 PM CS
 Copy the link below, open Winlator, and go to **Settings** -> **Downloadable Content URL** -> **Paste URL**.
 
     https://raw.githubusercontent.com/Xnick417x/Winlator-Bionic-Nightly-wcp/refs/heads/main/content.json
+
+If Contents don't show up. Try turning phone to Landscape View
 
 ---
 
