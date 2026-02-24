@@ -86,6 +86,7 @@ Third-party components used for packaging (such as DXVK, Wine, vkd3d-proton, FEX
 * Box64 [**ptitSeb**](https://github.com/ptitSeb)
 * DXVK [**Philip Rebohle**](https://github.com/doitsujin)
 * DXVK-Sarek [**pythonlover02**](https://github.com/pythonlover02)
+* DXVK-nvapi [**jp7677**](https://github.com/jp7677/dxvk-nvapi)
 * DXVK-GPLAsync Patch [**Ph42oN**](https://gitlab.com/Ph42oN)
 * VKD3D [**Hans-Kristian Arntzen**](https://github.com/HansKristian-Work)
 * Freedreno Turnip driver [**Mesa**](https://gitlab.freedesktop.org/mesa/mesa)
