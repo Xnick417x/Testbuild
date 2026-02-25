@@ -39,15 +39,45 @@ jobs:
         if: env.SHOULD_BUILD == 'true'
         run: |
           sudo apt-get update
-          sudo apt-get install -y git cmake make python3 p7zip-full wget tar file
+          sudo apt-get install -y git cmake make python3 p7zip-full wget tar file ccache
+
+      - name: Cache Android NDK
+        if: env.SHOULD_BUILD == 'true'
+        id: cache-ndk
+        uses: actions/cache@v4
+        with:
+          path: android-ndk-r26b
+          key: ndk-r26b
 
       - name: Setup Android NDK
-        if: env.SHOULD_BUILD == 'true'
+        if: env.SHOULD_BUILD == 'true' && steps.cache-ndk.outputs.cache-hit != 'true'
         run: |
           wget -q https://dl.google.com/android/repository/android-ndk-r26b-linux.zip
           unzip -q android-ndk-r26b-linux.zip
+          rm android-ndk-r26b-linux.zip
+
+      - name: Set NDK Environment
+        if: env.SHOULD_BUILD == 'true'
+        run: |
           echo "ANDROID_NDK_HOME=$PWD/android-ndk-r26b" >> $GITHUB_ENV
           echo "BOX64_COMPILER=$PWD/android-ndk-r26b/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android28-clang" >> $GITHUB_ENV
+
+      - name: Setup ccache
+        if: env.SHOULD_BUILD == 'true'
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-box64-native-${{ github.sha }}
+          restore-keys: |
+            ccache-box64-native-
+
+      - name: Configure ccache
+        if: env.SHOULD_BUILD == 'true'
+        run: |
+          mkdir -p .ccache
+          echo "CCACHE_DIR=$PWD/.ccache" >> $GITHUB_ENV
+          echo "CCACHE_COMPRESS=1" >> $GITHUB_ENV
+          echo "CCACHE_MAXSIZE=500M" >> $GITHUB_ENV
 
       - name: Get Version Info
         if: env.SHOULD_BUILD == 'true'
@@ -74,6 +104,8 @@ jobs:
           mkdir build
           cd build
           cmake ../source \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_C_COMPILER=${{ env.BOX64_COMPILER }} \
             -DANDROID=1 \
             -DARM_DYNAREC=1 \
@@ -81,6 +113,10 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release
           make -j$(nproc)
           ${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip box64
+
+      - name: Show ccache stats
+        if: env.SHOULD_BUILD == 'true'
+        run: ccache -s
 
       - name: Package
         if: env.SHOULD_BUILD == 'true'
@@ -189,15 +225,45 @@ jobs:
         if: env.SHOULD_BUILD == 'true'
         run: |
           sudo apt-get update
-          sudo apt-get install -y git cmake make python3 wget tar
+          sudo apt-get install -y git cmake make python3 wget tar ccache
+
+      - name: Cache llvm-mingw
+        if: env.SHOULD_BUILD == 'true'
+        id: cache-llvm-mingw
+        uses: actions/cache@v4
+        with:
+          path: llvm-mingw-20240619-ucrt-ubuntu-20.04-x86_64
+          key: llvm-mingw-20240619
 
       - name: Setup Toolchain
-        if: env.SHOULD_BUILD == 'true'
+        if: env.SHOULD_BUILD == 'true' && steps.cache-llvm-mingw.outputs.cache-hit != 'true'
         run: |
           LLVM_MINGW_VERSION=20240619
           wget -q https://github.com/mstorsjo/llvm-mingw/releases/download/${LLVM_MINGW_VERSION}/llvm-mingw-${LLVM_MINGW_VERSION}-ucrt-ubuntu-20.04-x86_64.tar.xz
           tar -xf llvm-mingw-*.tar.xz
+          rm llvm-mingw-*.tar.xz
+
+      - name: Set Toolchain Environment
+        if: env.SHOULD_BUILD == 'true'
+        run: |
           echo "MINGW_PATH=$PWD/$(ls -d llvm-mingw-* | head -n 1)/bin" >> $GITHUB_ENV
+
+      - name: Setup ccache
+        if: env.SHOULD_BUILD == 'true'
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-wowbox64-${{ github.sha }}
+          restore-keys: |
+            ccache-wowbox64-
+
+      - name: Configure ccache
+        if: env.SHOULD_BUILD == 'true'
+        run: |
+          mkdir -p .ccache
+          echo "CCACHE_DIR=$PWD/.ccache" >> $GITHUB_ENV
+          echo "CCACHE_COMPRESS=1" >> $GITHUB_ENV
+          echo "CCACHE_MAXSIZE=500M" >> $GITHUB_ENV
 
       - name: Clone and Patch
         if: env.SHOULD_BUILD == 'true'
@@ -231,11 +297,17 @@ jobs:
           mkdir build
           cd build
           cmake ../source \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_C_COMPILER=aarch64-w64-mingw32-gcc \
             -DWOW64=1 \
             -DARM_DYNAREC=1 \
             -DCMAKE_BUILD_TYPE=Release
           make -j$(nproc) wowbox64
+
+      - name: Show ccache stats
+        if: env.SHOULD_BUILD == 'true'
+        run: ccache -s
 
       - name: Package
         if: env.SHOULD_BUILD == 'true'

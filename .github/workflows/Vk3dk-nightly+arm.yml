@@ -41,10 +41,18 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             ca-certificates curl xz-utils jq git glslang-tools \
             build-essential python3 python3-pip pkg-config \
-            meson ninja-build zstd
+            meson ninja-build zstd ccache
+
+      - name: Cache llvm-mingw
+        if: env.SHOULD_BUILD == 'true'
+        id: cache-llvm-mingw
+        uses: actions/cache@v4
+        with:
+          path: /opt/llvm-mingw
+          key: llvm-mingw-20251104
 
       - name: Setup Toolchain (llvm-mingw)
-        if: env.SHOULD_BUILD == 'true'
+        if: env.SHOULD_BUILD == 'true' && steps.cache-llvm-mingw.outputs.cache-hit != 'true'
         run: |
           LLVM_MINGW_TAG="20251104"
           TOOLCHAIN_DIR="/opt/llvm-mingw"
@@ -52,7 +60,29 @@ jobs:
           sudo rm -rf "$TOOLCHAIN_DIR"
           sudo mkdir -p "$TOOLCHAIN_DIR"
           sudo tar -C "$TOOLCHAIN_DIR" --strip-components=1 -xJf llvm.tar.xz
-          echo "$TOOLCHAIN_DIR/bin" >> $GITHUB_PATH
+          rm llvm.tar.xz
+
+      - name: Set PATH
+        if: env.SHOULD_BUILD == 'true'
+        run: |
+          echo "/opt/llvm-mingw/bin" >> $GITHUB_PATH
+
+      - name: Setup ccache
+        if: env.SHOULD_BUILD == 'true'
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-vk3dk-standard-${{ github.sha }}
+          restore-keys: |
+            ccache-vk3dk-standard-
+
+      - name: Configure ccache
+        if: env.SHOULD_BUILD == 'true'
+        run: |
+          mkdir -p .ccache
+          echo "CCACHE_DIR=$PWD/.ccache" >> $GITHUB_ENV
+          echo "CCACHE_COMPRESS=1" >> $GITHUB_ENV
+          echo "CCACHE_MAXSIZE=500M" >> $GITHUB_ENV
 
       - name: Generate Version Info
         if: env.SHOULD_BUILD == 'true'
@@ -68,8 +98,10 @@ jobs:
         run: |
           cat <<EOF > cross-x64.txt
           [binaries]
-          c = '/opt/llvm-mingw/bin/x86_64-w64-mingw32-clang'
-          cpp = '/opt/llvm-mingw/bin/x86_64-w64-mingw32-clang++'
+          c = 'ccache'
+          cpp = 'ccache'
+          c_args = ['/opt/llvm-mingw/bin/x86_64-w64-mingw32-clang']
+          cpp_args = ['/opt/llvm-mingw/bin/x86_64-w64-mingw32-clang++']
           ar = '/opt/llvm-mingw/bin/llvm-ar'
           strip = '/opt/llvm-mingw/bin/llvm-strip'
           windres = '/opt/llvm-mingw/bin/x86_64-w64-mingw32-windres'
@@ -83,10 +115,28 @@ jobs:
           endian = 'little'
           EOF
           
+          # Simplified cross-file for meson+ccache
+          cat <<EOF > cross-x64.txt
+          [binaries]
+          c = ['ccache', '/opt/llvm-mingw/bin/x86_64-w64-mingw32-clang']
+          cpp = ['ccache', '/opt/llvm-mingw/bin/x86_64-w64-mingw32-clang++']
+          ar = '/opt/llvm-mingw/bin/llvm-ar'
+          strip = '/opt/llvm-mingw/bin/llvm-strip'
+          windres = '/opt/llvm-mingw/bin/x86_64-w64-mingw32-windres'
+          widl = '/opt/llvm-mingw/bin/x86_64-w64-mingw32-widl'
+          pkg-config = 'pkg-config'
+          exe_wrapper = ['wine']
+          [host_machine]
+          system = 'windows'
+          cpu_family = 'x86_64'
+          cpu = 'x86_64'
+          endian = 'little'
+          EOF
+
           cat <<EOF > cross-x86.txt
           [binaries]
-          c = '/opt/llvm-mingw/bin/i686-w64-mingw32-clang'
-          cpp = '/opt/llvm-mingw/bin/i686-w64-mingw32-clang++'
+          c = ['ccache', '/opt/llvm-mingw/bin/i686-w64-mingw32-clang']
+          cpp = ['ccache', '/opt/llvm-mingw/bin/i686-w64-mingw32-clang++']
           ar = '/opt/llvm-mingw/bin/llvm-ar'
           strip = '/opt/llvm-mingw/bin/llvm-strip'
           windres = '/opt/llvm-mingw/bin/i686-w64-mingw32-windres'
@@ -105,6 +155,10 @@ jobs:
           ninja -C build-x64
           meson setup build-x86 --cross-file ../cross-x86.txt -Dbuildtype=release -Dstrip=true
           ninja -C build-x86
+
+      - name: Show ccache stats
+        if: env.SHOULD_BUILD == 'true'
+        run: ccache -s
 
       - name: Package Standard
         if: env.SHOULD_BUILD == 'true'
@@ -232,17 +286,38 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y --no-install-recommends \
             ca-certificates curl xz-utils jq git python3 pkg-config \
-            zstd meson ninja-build wget unzip build-essential
+            zstd meson ninja-build wget unzip build-essential ccache
+
+      - name: Cache GLSLang
+        if: env.SHOULD_BUILD == 'true'
+        id: cache-glslang
+        uses: actions/cache@v4
+        with:
+          path: glslang
+          key: glslang-master
 
       - name: Setup GLSLang
-        if: env.SHOULD_BUILD == 'true'
+        if: env.SHOULD_BUILD == 'true' && steps.cache-glslang.outputs.cache-hit != 'true'
         run: |
           wget -q https://github.com/KhronosGroup/glslang/releases/download/master-tot/glslang-master-linux-Release.zip
           unzip -q glslang-master-linux-Release.zip -d glslang
+          rm glslang-master-linux-Release.zip
+
+      - name: Add GLSLang to Path
+        if: env.SHOULD_BUILD == 'true'
+        run: |
           echo "$PWD/glslang/bin" >> $GITHUB_PATH
 
-      - name: Setup Toolchain (llvm-mingw)
+      - name: Cache llvm-mingw
         if: env.SHOULD_BUILD == 'true'
+        id: cache-llvm-mingw
+        uses: actions/cache@v4
+        with:
+          path: /opt/llvm-mingw
+          key: llvm-mingw-20251104
+
+      - name: Setup Toolchain (llvm-mingw)
+        if: env.SHOULD_BUILD == 'true' && steps.cache-llvm-mingw.outputs.cache-hit != 'true'
         run: |
           LLVM_MINGW_TAG="20251104"
           TOOLCHAIN_DIR="/opt/llvm-mingw"
@@ -250,7 +325,29 @@ jobs:
           sudo rm -rf "$TOOLCHAIN_DIR"
           sudo mkdir -p "$TOOLCHAIN_DIR"
           sudo tar -C "$TOOLCHAIN_DIR" --strip-components=1 -xJf llvm.tar.xz
-          echo "$TOOLCHAIN_DIR/bin" >> $GITHUB_PATH
+          rm llvm.tar.xz
+
+      - name: Set PATH
+        if: env.SHOULD_BUILD == 'true'
+        run: |
+          echo "/opt/llvm-mingw/bin" >> $GITHUB_PATH
+
+      - name: Setup ccache
+        if: env.SHOULD_BUILD == 'true'
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-vk3dk-arm64ec-${{ github.sha }}
+          restore-keys: |
+            ccache-vk3dk-arm64ec-
+
+      - name: Configure ccache
+        if: env.SHOULD_BUILD == 'true'
+        run: |
+          mkdir -p .ccache
+          echo "CCACHE_DIR=$PWD/.ccache" >> $GITHUB_ENV
+          echo "CCACHE_COMPRESS=1" >> $GITHUB_ENV
+          echo "CCACHE_MAXSIZE=500M" >> $GITHUB_ENV
 
       - name: Generate Version Info
         if: env.SHOULD_BUILD == 'true'
@@ -266,8 +363,8 @@ jobs:
         run: |
           cat <<EOF > arm64ec.txt
           [binaries]
-          c = 'arm64ec-w64-mingw32-clang'
-          cpp = 'arm64ec-w64-mingw32-clang++'
+          c = ['ccache', 'arm64ec-w64-mingw32-clang']
+          cpp = ['ccache', 'arm64ec-w64-mingw32-clang++']
           ar = 'llvm-ar'
           strip = 'llvm-strip'
           windres = 'arm64ec-w64-mingw32-windres'
@@ -282,8 +379,8 @@ jobs:
 
           cat <<EOF > x86.txt
           [binaries]
-          c = 'i686-w64-mingw32-clang'
-          cpp = 'i686-w64-mingw32-clang++'
+          c = ['ccache', 'i686-w64-mingw32-clang']
+          cpp = ['ccache', 'i686-w64-mingw32-clang++']
           ar = 'llvm-ar'
           strip = 'llvm-strip'
           windres = 'i686-w64-mingw32-windres'
@@ -301,6 +398,10 @@ jobs:
           ninja -C build-ec -j 2
           meson setup build-x86 --cross-file ../x86.txt -Dbuildtype=release -Dstrip=true
           ninja -C build-x86 -j 2
+
+      - name: Show ccache stats
+        if: env.SHOULD_BUILD == 'true'
+        run: ccache -s
 
       - name: Package ARM64EC
         if: env.SHOULD_BUILD == 'true'

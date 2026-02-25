@@ -43,10 +43,18 @@ jobs:
           ca-certificates curl xz-utils jq git glslang-tools \
           build-essential python3 python3-venv python3-pip \
           pkg-config cmake ninja-build zstd dos2unix perl tar unzip \
-          llvm crossbuild-essential-arm64
+          llvm crossbuild-essential-arm64 ccache
+
+    - name: Cache llvm-mingw
+      if: env.SHOULD_BUILD == 'true'
+      id: cache-llvm-mingw
+      uses: actions/cache@v4
+      with:
+        path: /opt/llvm-mingw
+        key: llvm-mingw-20251104
 
     - name: Setup Toolchain
-      if: env.SHOULD_BUILD == 'true'
+      if: env.SHOULD_BUILD == 'true' && steps.cache-llvm-mingw.outputs.cache-hit != 'true'
       run: |
         LLVM_MINGW_TAG="20251104"
         TOOLCHAIN_DIR="/opt/llvm-mingw"
@@ -56,8 +64,29 @@ jobs:
         sudo rm -rf "$TOOLCHAIN_DIR"
         sudo mkdir -p "$TOOLCHAIN_DIR"
         sudo tar -C "$TOOLCHAIN_DIR" --strip-components=1 -xJf llvm.tar.xz
-        
-        echo "$TOOLCHAIN_DIR/bin" >> $GITHUB_PATH
+        rm llvm.tar.xz
+
+    - name: Set PATH
+      if: env.SHOULD_BUILD == 'true'
+      run: |
+        echo "/opt/llvm-mingw/bin" >> $GITHUB_PATH
+
+    - name: Setup ccache
+      if: env.SHOULD_BUILD == 'true'
+      uses: actions/cache@v4
+      with:
+        path: .ccache
+        key: ccache-fexcore-${{ github.sha }}
+        restore-keys: |
+          ccache-fexcore-
+
+    - name: Configure ccache
+      if: env.SHOULD_BUILD == 'true'
+      run: |
+        mkdir -p .ccache
+        echo "CCACHE_DIR=$PWD/.ccache" >> $GITHUB_ENV
+        echo "CCACHE_COMPRESS=1" >> $GITHUB_ENV
+        echo "CCACHE_MAXSIZE=500M" >> $GITHUB_ENV
 
     - name: Generate Version Name
       if: env.SHOULD_BUILD == 'true'
@@ -88,7 +117,10 @@ jobs:
           mkdir "$build_dir"
           cd "$build_dir"
           
+          # CMake will pick up ccache via CMAKE_<LANG>_COMPILER_LAUNCHER if configured
           cmake -G Ninja -Wno-dev \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE=../Data/CMake/toolchain_mingw.cmake \
             -DMINGW_TRIPLE="${triple}-w64-mingw32" \
@@ -110,6 +142,10 @@ jobs:
         
         build_arch "arm64ec" "../../stage-ec"
         build_arch "aarch64" "../../stage-wo"
+
+    - name: Show ccache stats
+      if: env.SHOULD_BUILD == 'true'
+      run: ccache -s
 
     - name: Package
       if: env.SHOULD_BUILD == 'true'
