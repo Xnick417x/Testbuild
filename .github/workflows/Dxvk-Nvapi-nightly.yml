@@ -24,14 +24,16 @@ jobs:
       - name: Check for Updates
         id: check
         run: |
+          cd dxvk
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "SHOULD_BUILD=true" >> $GITHUB_ENV
+            echo "UPSTREAM_HASH=$(git rev-parse HEAD)" >> $GITHUB_ENV
           else
-            cd dxvk
             if [ -z "$(git log --since='26 hours ago' --pretty=format:'%H')" ]; then
               echo "SHOULD_BUILD=false" >> $GITHUB_ENV
             else
               echo "SHOULD_BUILD=true" >> $GITHUB_ENV
+              echo "UPSTREAM_HASH=$(git rev-parse HEAD)" >> $GITHUB_ENV
             fi
           fi
 
@@ -46,7 +48,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .ccache
-          key: ccache-dxvk-nvapi-standard-${{ github.sha }}
+          key: ccache-dxvk-nvapi-standard-${{ env.UPSTREAM_HASH }}
           restore-keys: |
             ccache-dxvk-nvapi-standard-
 
@@ -264,14 +266,16 @@ jobs:
       - name: Check for Updates
         id: check
         run: |
+          cd dxvk
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "SHOULD_BUILD=true" >> $GITHUB_ENV
+            echo "UPSTREAM_HASH=$(git rev-parse HEAD)" >> $GITHUB_ENV
           else
-            cd dxvk
             if [ -z "$(git log --since='26 hours ago' --pretty=format:'%H')" ]; then
               echo "SHOULD_BUILD=false" >> $GITHUB_ENV
             else
               echo "SHOULD_BUILD=true" >> $GITHUB_ENV
+              echo "UPSTREAM_HASH=$(git rev-parse HEAD)" >> $GITHUB_ENV
             fi
           fi
 
@@ -329,7 +333,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .ccache
-          key: ccache-dxvk-nvapi-arm64ec-${{ github.sha }}
+          key: ccache-dxvk-nvapi-arm64ec-${{ env.UPSTREAM_HASH }}
           restore-keys: |
             ccache-dxvk-nvapi-arm64ec-
 
