@@ -3,7 +3,7 @@ name: Build Box64 Bionic Nightly
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '14 3 * * *'
 
 permissions:
   contents: write
