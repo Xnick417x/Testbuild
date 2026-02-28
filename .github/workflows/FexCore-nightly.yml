@@ -2,7 +2,7 @@ name: Build FexCore Nightly
 
 on:
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '14 3 * * *'
   workflow_dispatch:
 
 permissions:
