@@ -99,7 +99,7 @@ Third-party components used for packaging (such as DXVK, Wine, vkd3d-proton, FEX
 * The412banner - wcp hub [**The412Banner**](https://github.com/The412Banner/Nightlies)
 * Zero K11MCH1 - Stables [**K11MCH1**](https://github.com/K11MCH1/Winlator101)
 * GameNative - Wine layers [**GameNative**](https://github.com/utkarshdalal/GameNative)
-* Ajay [**Ajay Prefix Pro**]([https://dub.sh/AjayPrefixPro](https://ajay9634dev-pludc.wordpress.com/))
+* Ajay [**Ajay Prefix Pro**](https://ajay9634dev-pludc.wordpress.com/)
 
 ---
 
