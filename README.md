@@ -101,6 +101,14 @@ Third-party components used for packaging (such as DXVK, Wine, vkd3d-proton, FEX
 * GameNative - Wine layers [**GameNative**](https://github.com/utkarshdalal/GameNative)
 * Ajay [**Ajay Prefix Pro**](https://dub.sh/AjayPrefixPro)
 
+---
+
+### Disclaimer ⚠️
+wcp's are compiled binary's from latest upstream sources. They are not my work. They are not always stable. You the user accept the risks and responsibility.
+If you shall find an issue with something. Please contact the source of the provider, and make an issue request. 
+
+---
+
 <div align="center">
 Maintained by Xnick417x
 </div>
