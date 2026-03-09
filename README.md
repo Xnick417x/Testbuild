@@ -38,8 +38,6 @@ If Contents don't show up. Try turning phone to Landscape View
 | **Weekly Bundle** (All-in-One) | [**Download Latest**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Weekly-2026-03-06/Weekly-2026-03-06.zip) | [View History](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases?q=Weekly&expanded=true) |
 | **DXVK** (GPLAsync) | [**Download Latest**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/dxvk-nightly-6f3a758f/dxvk-2.7.1-gplasync-6f3a758f.wcp) | [View History](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases?q=dxvk-nightly+NOT+arm64ec+NOT+Weekly&expanded=true) |
 | **DXVK** (ARM64EC) | [**Download Latest**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/dxvk-arm64ec-nightly-6f3a758f/dxvk-2.7.1-gplasync-arm64ec-6f3a758f.wcp) | [View History](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases?q=dxvk-arm64ec-nightly+NOT+Weekly&expanded=true) |
-| **DXVK-NVAPI** (GPLAsync) | [**Download Latest**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/dxvk-nvapi-nightly-6f3a758f/dxvk-2.7.1-nvapi-gplasync-6f3a758f.wcp) | [View History](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases?q=dxvk-nvapi-nightly+NOT+arm64ec+NOT+Weekly&expanded=true) |
-| **DXVK-NVAPI** (ARM64EC) | [**Download Latest**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/dxvk-nvapi-arm64ec-nightly-6f3a758f/dxvk-2.7.1-nvapi-arm64ec-6f3a758f.wcp) | [View History](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases?q=dxvk-nvapi-arm64ec-nightly+NOT+Weekly&expanded=true) |
 | **VKD3D-Proton** (Standard) | [**Download Latest**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/vk3dk-nightly-bf4a0240/Vk3dk-Standard-3.0b-bf4a0240.wcp) | [View History](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases?q=vk3dk-nightly+NOT+arm64ec+NOT+Weekly&expanded=true) |
 | **VKD3D-Proton** (ARM64EC) | [**Download Latest**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/vk3dk-arm64ec-nightly-bf4a0240/Vk3dk-Arm64ec-3.0b-arm64ec-bf4a0240.wcp) | [View History](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases?q=vk3dk-arm64ec-nightly+NOT+Weekly&expanded=true) |
 | **FEXCore** (ARM64EC) | [**Download Latest**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/fex-nightly-2603-9eb639e89/FEXCore-2603-9eb639e89.wcp) | [View History](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases?q=fex-nightly+NOT+Weekly&expanded=true) |
@@ -86,7 +84,6 @@ Third-party components used for packaging (such as DXVK, Wine, vkd3d-proton, FEX
 * Box64 [**ptitSeb**](https://github.com/ptitSeb)
 * DXVK [**Philip Rebohle**](https://github.com/doitsujin)
 * DXVK-Sarek [**pythonlover02**](https://github.com/pythonlover02)
-* DXVK-nvapi [**jp7677**](https://github.com/jp7677/dxvk-nvapi)
 * DXVK-GPLAsync Patch [**Ph42oN**](https://gitlab.com/Ph42oN)
 * VKD3D [**Hans-Kristian Arntzen**](https://github.com/HansKristian-Work)
 * Freedreno Turnip driver [**Mesa**](https://gitlab.freedesktop.org/mesa/mesa)
