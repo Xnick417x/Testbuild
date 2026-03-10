@@ -409,9 +409,9 @@
   },
   {
     "type": "Wine",
-    "verName": "wine-9.20",
+    "verName": "wine-9.20-x86_64",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Wine/wine-9.20.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Wine/wine-9.20-x86_64.wcp"
   },
   {
     "type": "Wine",
