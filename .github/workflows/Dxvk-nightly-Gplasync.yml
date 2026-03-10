@@ -391,7 +391,7 @@ jobs:
             "type": "DXVK",
             "versionName": "${{ env.VERSION_NAME }}",
             "versionCode": 0,
-            "description": "DXVK ${{ env.LATEST_TAG }} ARM64EC",
+            "description": "DXVK ${{ env.LATEST_TAG }} ARM64EC GPLAsync",
             "files": [
               {
                 "source": "system32/d3d10core.dll",
