@@ -205,21 +205,21 @@
   },
   {
     "type": "FEXCore",
-    "verName": "FEX-2509-1",
+    "verName": "FEX-2509",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Stable-FEX/FEX-2509-1.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Stable-FEX/FEX-2509.wcp"
   },
   {
     "type": "FEXCore",
-    "verName": "FEX-2508-1",
+    "verName": "FEX-2508",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Stable-FEX/FEX-2508-1.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Stable-FEX/FEX-2508.wcp"
   },
   {
     "type": "FEXCore",
-    "verName": "FEX-2507-0",
+    "verName": "FEX-2507",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Stable-FEX/FEX-2507-0.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Stable-FEX/FEX-2507.wcp"
   },
   {
     "type": "Proton",
