@@ -271,9 +271,9 @@
   },
   {
     "type": "VKD3D",
-    "verName": "Vk3dk-arm64ec-2.4.1",
+    "verName": "Vk3dk-arm64ec-2.14.1",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Stable-Arm64ec-Vk3dk/Vk3dk-arm64ec-2.4.1.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Stable-Arm64ec-Vk3dk/Vk3dk-arm64ec-2.14.1.wcp"
   },
   {
     "type": "VKD3D",
