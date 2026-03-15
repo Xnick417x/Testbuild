@@ -65,7 +65,7 @@ If Contents don't show up. Try turning phone to Landscape View
 [**Download Assets**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/tag/GameNative)
 
 ###  Runtime Packages
-[**Download**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Packages/Runtime.packages.zip)
+[**Download Runtime Package**](https://huggingface.co/datasets/Xnick417x/Runtime-packages/resolve/main/Runtime-packages.7z?download=true)
 
 ---
 
